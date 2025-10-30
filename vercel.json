@@ -5,29 +5,32 @@
     ],
     "routes": [
       {
-        "src": "/api/auth/signup",
-        "dest": "/api/auth/signup.js",
+        "src": "/api/health",
+        "dest": "/api/health.js",
+        "methods": ["GET"],
         "headers": {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET,HEAD,PUT,PATCH,POST,DELETE",
+          "Access-Control-Allow-Methods": "GET",
           "Access-Control-Allow-Headers": "Content-Type"
         }
       },
       {
-        "src": "/api/auth/login",
-        "dest": "/api/auth/login.js",
+        "src": "/api/auth/(.*)",
+        "dest": "/api/auth/$1.js",
+        "methods": ["GET", "POST", "OPTIONS"],
         "headers": {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET,HEAD,PUT,PATCH,POST,DELETE",
-          "Access-Control-Allow-Headers": "Content-Type"
+          "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type,Authorization"
         }
       },
       {
         "src": "/api/profile",
         "dest": "/api/profile.js",
+        "methods": ["GET"],
         "headers": {
           "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET,HEAD,PUT,PATCH,POST,DELETE",
+          "Access-Control-Allow-Methods": "GET",
           "Access-Control-Allow-Headers": "Content-Type,Authorization"
         }
       }
