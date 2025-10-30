@@ -1,6 +1,5 @@
 import express from "express";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { supabase } from "../../supabase.js";
 
 const router = express.Router();
@@ -20,17 +19,14 @@ router.post("/", async (req, res) => {
   const match = await bcrypt.compare(password, user.password);
   if (!match) return res.status(401).json({ message: "Wrong password" });
 
-  const token = jwt.sign(
-    {
+  res.json({ 
+    message: "Login successful",
+    user: {
       user_id: user.user_id,
       email_id: user.email_id,
-      rank: user.rank,
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: "1h" }
-  );
-
-  res.json({ message: "Login successful", token });
+      rank: user.rank
+    }
+  });
 });
 
 export default router;

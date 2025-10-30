@@ -19,7 +19,6 @@
     "bcryptjs": "^3.0.2",
     "dotenv": "^16.1.4",
     "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2",
     "postgres": "^3.4.7"
   },
   "devDependencies": {
