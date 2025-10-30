@@ -4,20 +4,45 @@ import profileRoutes from "./api/profile.js";
 
 const app = express();
 
+// Middleware
 app.use(express.json());
 
-// mount routes under /api/auth
-app.use("/api/auth", authRoutes);
+// Health check endpoint
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    message: "API is running"
+  });
+});
 
-// mount profile route at /api/profile
+// Mount routes
+app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 
 // Basic root route
 app.get("/", (req, res) => {
-  res.send("Node js server is running");
+  res.json({ message: "Warje Police Project API" });
 });
 
-// Start local server only when not running in production (Vercel will import the app)
+// Handle 404s
+app.use((req, res) => {
+  res.status(404).json({ 
+    error: "Not Found",
+    message: `Cannot ${req.method} ${req.url}`
+  });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ 
+    error: "Internal Server Error",
+    message: err.message 
+  });
+});
+
+// Start local server only when not running in production
 if (process.env.NODE_ENV !== "production") {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
@@ -25,5 +50,5 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
-// Export the app for Vercel serverless runtime
+// For Vercel deployment: export the app
 export default app;
