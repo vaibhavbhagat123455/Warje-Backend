@@ -1,10 +1,20 @@
 {
     "version": 2,
     "builds": [
-      { "src": "api/index.js", "use": "@vercel/node" }
+      { "src": "api/**/*.js", "use": "@vercel/node" }
     ],
     "routes": [
-      { "src": "/api/(.*)", "dest": "/api/index.js" },
-      { "src": "/(.*)", "dest": "/api/index.js" }
+      {
+        "src": "/api/auth/signup",
+        "dest": "/api/auth/signup.js"
+      },
+      {
+        "src": "/api/auth/login",
+        "dest": "/api/auth/login.js"
+      },
+      {
+        "src": "/api/profile",
+        "dest": "/api/profile.js"
+      }
     ]
   }  
