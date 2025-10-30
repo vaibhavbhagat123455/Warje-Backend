@@ -6,15 +6,30 @@
     "routes": [
       {
         "src": "/api/auth/signup",
-        "dest": "/api/auth/signup.js"
+        "dest": "/api/auth/signup.js",
+        "headers": {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET,HEAD,PUT,PATCH,POST,DELETE",
+          "Access-Control-Allow-Headers": "Content-Type"
+        }
       },
       {
         "src": "/api/auth/login",
-        "dest": "/api/auth/login.js"
+        "dest": "/api/auth/login.js",
+        "headers": {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET,HEAD,PUT,PATCH,POST,DELETE",
+          "Access-Control-Allow-Headers": "Content-Type"
+        }
       },
       {
         "src": "/api/profile",
-        "dest": "/api/profile.js"
+        "dest": "/api/profile.js",
+        "headers": {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET,HEAD,PUT,PATCH,POST,DELETE",
+          "Access-Control-Allow-Headers": "Content-Type,Authorization"
+        }
       }
     ]
   }  
