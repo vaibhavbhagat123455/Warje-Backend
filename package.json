@@ -1,12 +1,12 @@
 {
   "name": "warje-police-project",
   "version": "1.0.0",
-  "type": "module",
+
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon index.js",
-    "start": "node index.js"
+    "dev": "nodemon api/index.js",
+    "start": "node api/index.js"
   },
   "engines": {
     "node": "22.x"
