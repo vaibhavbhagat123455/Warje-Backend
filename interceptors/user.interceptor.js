@@ -1,18 +1,13 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const validator = require('validator');
-const { supabase } = require('../../supabase.js'); // ✅ import Supabase instance
+import express from "express";
+import bodyParser from "body-parser";
+import validator from "validator";
+import { supabase } from "../../supabase.js"; // ✅ import Supabase instance
 
 const app = express();
 app.use(bodyParser.json());
 
-module.exports = {
-    checkLogin,
-    validateNewUser
-};
-
 // SIGNUP INTERCEPTOR
-async function validateNewUser(req, res, next) {
+export async function validateNewUser(req, res, next) {
     const { userName, emailID, password, code } = req.body;
 
     // Basic field check
@@ -55,7 +50,7 @@ async function validateNewUser(req, res, next) {
 }
 
 // LOGIN INTERCEPTOR
-function checkLogin(req, res, next) {
+export function checkLogin(req, res, next) {
     const { emailID, password, code } = req.body;
 
     if (!code || !emailID || !password) {

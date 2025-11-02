@@ -1,6 +1,6 @@
 const express = require("express");
-const dotenv = require("dotenv");
 const authRoutes = require("./routes/index.js");
+const dotenv = require("dotenv");
 
 dotenv.config();
 
@@ -21,7 +21,7 @@ app.get("/", (req, res) => {
 app.use((req, res) => {
   res.status(404).json({
     error: "Not Found",
-    message: `Cannot ${req.method} ${req.url}`
+    message: `Cannot ${req.method} ${req.url}`,
   });
 });
 
@@ -30,11 +30,11 @@ app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({
     error: "Internal Server Error",
-    message: err.message
+    message: err.message,
   });
 });
 
-// Start local server only when not running in production
+// Start server locally (not on Vercel)
 if (process.env.NODE_ENV !== "production") {
   const PORT = process.env.PORT || 8080;
   app.listen(PORT, () => {
@@ -42,5 +42,5 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
-// For Vercel deployment
+// Export app (for Vercel or testing)
 module.exports = app;
