@@ -1,6 +1,6 @@
 import express from "express";
 import authRoutes from "./routes/index.js";
-import profileRoutes from "./api/profile.js";
+// import profileRoutes from "./api/profile.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -10,17 +10,17 @@ const app = express();
 app.use(express.json());
 
 // Health check endpoint
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    message: "API is running"
-  });
-});
+// app.get("/api/health", (req, res) => {
+//   res.json({
+//     status: "ok",
+//     timestamp: new Date().toISOString(),
+//     message: "API is running"
+//   });
+// });
 
 // Mount routes
-app.use("/api/auth", authRoutes);
-app.use("/api/profile", profileRoutes);
+app.use("/routes", authRoutes);
+// app.use("/api/profile", profileRoutes);
 
 // Basic root route
 app.get("/", (req, res) => {

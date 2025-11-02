@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
-const axios = require('axios');
 const bcrypt = require('bcrypt');
 import { supabase } from "../../supabase.js";
 
@@ -11,7 +10,6 @@ require('dotenv').config();
 module.exports = new UserController();
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
-
 
 const createToken = (key) => {
     return jwt.sign({ key }, process.env.JWT_SECRET, { expiresIn: "30d" });
@@ -26,66 +24,59 @@ const transporter = nodemailer.createTransport({
 });
 
 async function sendOTP(req, res) {
-    try {
-        const { email_id } = req.body;
+  try {
+    const { email_id } = req.body;
 
-        if (!email_id) {
-            return res.status(400).json({ message: "Email ID is required" });
-        }
-
-        // Check if temp record already exists
-        const { data: existingTemp } = await supabase
-            .from("temp_users")
-            .select("*")
-            .eq("email_id", email_id)
-            .single();
-
-        // Generate OTP
-        const otp = generateOTP();
-
-        // Hash OTP before storing
-        const hashedOtp = await bcrypt.hash(otp.toString(), 10);
-
-        // Calculate expiry (5 min)
-        const expiry = new Date(Date.now() + 5 * 60 * 1000);
-
-        if (existingTemp) {
-            // Update existing temp user
-            await supabase
-                .from("temp_users")
-                .update({ otp_code: hashedOtp, expiry_time: expiry })
-                .eq("email_id", email_id);
-        } else {
-            // Insert new temp user
-            await supabase.from("temp_users").insert([
-                {
-                    email_id,
-                    otp_code: hashedOtp,
-                    expiry_time: expiry,
-                },
-            ]);
-        }
-
-        // Send Email
-        await transporter.sendMail({
-            from: process.env.EMAIL,
-            to: email_id,
-            subject: `Your OTP Code`,
-            html: `
-        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto;">
-          <h2 style="color:#030711;text-align:center;">OTP Verification</h2>
-          <p style="text-align:center;">Your OTP code is:</p>
-          <h1 style="text-align:center;color:#030711;">${otp}</h1>
-          <p style="text-align:center;color:red;">This code will expire in 5 minutes.</p>
-        </div>
-      `,
-        });
-
-        return res.status(200).json({ message: "OTP sent successfully" });
-    } catch (error) {
-        console.error("Send OTP Error:", error);
-        return res.status(500).json({ message: "Internal server error" });
+    if (!email_id) {
+      return res.status(400).json({ message: "Email ID is required" });
     }
+
+    // Generate 4-digit OTP
+    const otp = Math.floor(1000 + Math.random() * 9000);
+
+    // Check if OTP record already exists for this email
+    const { data: existingTemp } = await supabase
+      .from("temp_users")
+      .select("*")
+      .eq("email_id", email_id)
+      .maybeSingle();
+
+    if (existingTemp) {
+      await supabase
+        .from("temp_users")
+        .update({ otp })
+        .eq("email_id", email_id);
+    } else {
+      await supabase
+        .from("temp_users")
+        .insert([{ email_id, otp }]);
+    }
+
+    // Send OTP via email
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+
+    const mailOptions = {
+      from: `"Warje Police Project" <${process.env.EMAIL}>`,
+      to: email_id,
+      subject: "Your OTP for Signup",
+      text: `Your verification OTP is ${otp}. It is valid for 5 minutes.`,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({
+      message: `OTP sent successfully to ${email_id}`,
+    });
+  } catch (error) {
+    console.error("OTP Error:", error);
+    res.status(500).json({ message: "Failed to send OTP" });
+  }
 }
 
 // verify otp and createuser
