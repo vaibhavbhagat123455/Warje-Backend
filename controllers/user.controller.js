@@ -3,7 +3,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const bcrypt = require('bcrypt');
-import { supabase } from "../../supabase.js";
+import { supabase } from "../supabase.js";
 
 require('dotenv').config();
 
