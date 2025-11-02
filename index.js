@@ -1,7 +1,7 @@
-import express from "express";
-import authRoutes from "./routes/index.js";
-// import profileRoutes from "./api/profile.js";
-import dotenv from "dotenv";
+const express = require("express");
+const dotenv = require("dotenv");
+const authRoutes = require("./routes/index.js");
+
 dotenv.config();
 
 const app = express();
@@ -9,18 +9,8 @@ const app = express();
 // Middleware
 app.use(express.json());
 
-// Health check endpoint
-// app.get("/api/health", (req, res) => {
-//   res.json({
-//     status: "ok",
-//     timestamp: new Date().toISOString(),
-//     message: "API is running"
-//   });
-// });
-
 // Mount routes
 app.use("/routes", authRoutes);
-// app.use("/api/profile", profileRoutes);
 
 // Basic root route
 app.get("/", (req, res) => {
@@ -29,7 +19,7 @@ app.get("/", (req, res) => {
 
 // Handle 404s
 app.use((req, res) => {
-  res.status(404).json({ 
+  res.status(404).json({
     error: "Not Found",
     message: `Cannot ${req.method} ${req.url}`
   });
@@ -38,9 +28,9 @@ app.use((req, res) => {
 // Error handler
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(500).json({ 
+  res.status(500).json({
     error: "Internal Server Error",
-    message: err.message 
+    message: err.message
   });
 });
 
@@ -52,5 +42,5 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
-// For Vercel deployment: export the app
-export default app;
+// For Vercel deployment
+module.exports = app;
