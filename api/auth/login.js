@@ -10,7 +10,7 @@ app.post("/", async (req, res) => {
 
   const { data: user, error } = await supabase
     .from("users")
-    .select("*")
+    .select("email_id")
     .eq("email_id", email_id)
     .single();
 
@@ -21,11 +21,6 @@ app.post("/", async (req, res) => {
 
   res.json({
     message: "Login successful",
-    user: {
-      user_id: user.user_id,
-      email_id: user.email_id,
-      rank: user.rank,
-    },
   });
 });
 
