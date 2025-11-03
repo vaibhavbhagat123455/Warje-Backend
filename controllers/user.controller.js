@@ -53,7 +53,7 @@ async function sendOTP(req, res) {
     // console.log("OTP stored successfully ✅");
 
     const mailOptions = {
-      from: `"Warje Police Project" <${process.env.EMAIL}>`,
+      from: `"Sanket Darshak" <${process.env.EMAIL}>`,
       to: email_id,
       subject: "Your OTP for Signup",
       text: `Your verification OTP is ${code}. It is valid for 5 minutes.`,
