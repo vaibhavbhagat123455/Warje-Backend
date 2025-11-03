@@ -1,5 +1,5 @@
 import express from "express";
-import userRoutes from "./routes/user.route.js";
+import apiRoutes from "./routes/index.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -10,7 +10,7 @@ const app = express();
 app.use(express.json());
 
 // Mount routes
-app.use("/routes", userRoutes);
+app.use("/api", apiRoutes);
 
 // Basic root route
 app.get("/", (req, res) => {
