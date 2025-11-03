@@ -23,12 +23,18 @@ const transporter = nodemailer.createTransport({
 // ✅ Step 1: Send OTP
 async function sendOTP(req, res) {
   try {
-    const { email_id } = req.body;
-    if (!email_id) return res.status(400).json({ message: "Email ID is required" });
+    const { email_id, purpose } = req.body;
+    if (!email_id || !purpose)
+      return res.status(400).json({ message: "Email ID and purpose are required" });
+
+    // ✅ Validate purpose
+    if (!["signup", "login"].includes(purpose.toLowerCase()))
+      return res.status(400).json({ message: "Invalid purpose. Must be 'signup' or 'login'." });
 
     const code = generateOTP();
-    const expiry_time = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const expiry_time = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // valid for 5 mins
 
+    // ✅ Store or update in Supabase
     const { data: existingTemp, error: selectError } = await supabase
       .from("temp_users")
       .select("*")
@@ -40,34 +46,46 @@ async function sendOTP(req, res) {
     if (existingTemp) {
       const { error: updateError } = await supabase
         .from("temp_users")
-        .update({ code, expiry_time })
+        .update({ code, expiry_time, purpose })
         .eq("email_id", email_id);
       if (updateError) throw updateError;
-    } else {
+    } 
+    
+    else {
       const { error: insertError } = await supabase
         .from("temp_users")
-        .insert([{ email_id, code, expiry_time }]);
+        .insert([{ email_id, code, expiry_time, purpose }]);
       if (insertError) throw insertError;
     }
 
-    // console.log("OTP stored successfully ✅");
+    // ✅ Email subject/message based on purpose
+    const subject =
+      purpose === "signup"
+        ? "Your OTP for Signup"
+        : "Your OTP for Login";
+
+    const messageText =
+      purpose === "signup"
+        ? `Your verification OTP for signup is ${code}. It is valid for 5 minutes.`
+        : `Your OTP for login is ${code}. It is valid for 5 minutes.`;
 
     const mailOptions = {
       from: `"Sanket Darshak" <${process.env.EMAIL}>`,
       to: email_id,
-      subject: "Your OTP for Signup",
-      text: `Your verification OTP is ${code}. It is valid for 5 minutes.`,
+      subject,
+      text: messageText,
     };
 
     await transporter.sendMail(mailOptions);
 
-    res.status(200).json({ message: `OTP sent successfully to ${email_id}` });
+    res.status(200).json({
+      message: `OTP sent successfully to ${email_id} for ${purpose}`,
+    });
   } catch (error) {
     console.error("OTP Error:", error);
     res.status(500).json({ message: "Failed to send OTP" });
   }
 }
-
 
 // ✅ Step 2: Verify OTP & Signup
 async function validateSignup(req, res) {
