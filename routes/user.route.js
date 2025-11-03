@@ -1,11 +1,11 @@
-import express from "express";
-import { sendOTP, signup, validateLoginOtp } from "../controllers/user.controller.js";
-import { validateOtpReq, validateNewUser, checkLogin } from "../interceptor/user.interceptor.js";
+import express from "express"
+import userController from "../controllers/user.controller.js" 
+import userIntercetor from "../interceptors/user.interceptor.js" 
 
-const router = express.Router();
+const router = express.Router()
 
-router.post("/sendOtp", validateOtpReq, sendOTP);
-router.post("/signup", validateNewUser, signup);
-router.post("/login", checkLogin, validateLoginOtp);
+router.post("/sendOtp", userIntercetor.validateOtpReq, userController.sendOTP)
+router.post("/signup", userIntercetor.validateNewUser, userController.validateSignup)
+router.post("/login", userIntercetor.checkLogin, userController.validateLogin)
 
-export default router;
+export default router

@@ -1,13 +1,8 @@
-import express from "express";
-import bodyParser from "body-parser";
 import validator from "validator";
-import { supabase } from "../../supabase.js"; // ✅ import Supabase instance
-
-const app = express();
-app.use(bodyParser.json());
+import { supabase } from "../supabase.js";
 
 // SIGNUP INTERCEPTOR
-export async function validateNewUser(req, res, next) {
+async function validateNewUser(req, res, next) {
     const { userName, emailID, password, code } = req.body;
 
     // Basic field check
@@ -50,7 +45,7 @@ export async function validateNewUser(req, res, next) {
 }
 
 // LOGIN INTERCEPTOR
-export function checkLogin(req, res, next) {
+function checkLogin(req, res, next) {
     const { emailID, password, code } = req.body;
 
     if (!code || !emailID || !password) {
@@ -66,4 +61,24 @@ export function checkLogin(req, res, next) {
     }
 
     next();
+}
+
+function validateOtpReq(req, res, next) {
+    const { emailID, purpose } = req.body;
+
+    if (!emailID || !purpose) {
+        return res.status(400).json({ error: 'Both emailID and purpose are required fields.' });
+    }
+
+    if (!validator.isEmail(emailID)) {
+        return res.status(400).json({ error: 'Invalid email format.' });
+    }
+
+    next();
+}
+
+export default {
+    validateNewUser,
+    checkLogin,
+    validateOtpReq
 }

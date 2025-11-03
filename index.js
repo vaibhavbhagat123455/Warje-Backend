@@ -1,6 +1,6 @@
-const express = require("express");
-const authRoutes = require("./routes/index.js");
-const dotenv = require("dotenv");
+import express from "express";
+import userRoutes from "./routes/user.route.js";
+import dotenv from "dotenv";
 
 dotenv.config();
 
@@ -10,7 +10,7 @@ const app = express();
 app.use(express.json());
 
 // Mount routes
-app.use("/routes", authRoutes);
+app.use("/routes", userRoutes);
 
 // Basic root route
 app.get("/", (req, res) => {
@@ -43,4 +43,4 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 // Export app (for Vercel or testing)
-module.exports = app;
+export default app;

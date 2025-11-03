@@ -1,9 +1,10 @@
-const express = require('express');
-const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
-const bcrypt = require('bcrypt');
-const { supabase } = require("../supabase.js");
-require('dotenv').config();
+import jwt from "jsonwebtoken"
+import nodemailer from "nodemailer"
+import bcrypt from "bcrypt"
+import dotenv from "dotenv"
+import { supabase }  from "../supabase.js"
+
+dotenv.config();
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
@@ -58,7 +59,7 @@ async function sendOTP(req, res) {
 }
 
 // ✅ Step 2: Verify OTP & Signup
-async function signup(req, res) {
+async function validateSignup(req, res) {
   try {
     const { name, rank, email_id, password, otp } = req.body;
 
@@ -114,4 +115,47 @@ async function signup(req, res) {
   }
 }
 
-module.exports = { sendOTP, signup };
+// ✅ Step 3: Login User
+async function validateLogin(req, res) {
+  try {
+    const { email_id, password } = req.body;
+
+    // Check required fields
+    if (!email_id || !password)
+      return res.status(400).json({ message: "Email ID and password are required" });
+
+    // Find user in Supabase
+    const { data: user, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email_id", email_id)
+      .single();
+
+    if (error || !user)
+      return res.status(400).json({ message: "Invalid email or password" });
+
+    // Compare password with hashed password in DB
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch)
+      return res.status(400).json({ message: "Invalid email or password" });
+
+    // Generate JWT token
+    const token = createToken(user.email_id);
+
+    res.status(200).json({
+      message: "Login successful",
+      token,
+      user: {
+        name: user.name,
+        rank: user.rank,
+        email_id: user.email_id,
+      },
+    });
+  } catch (error) {
+    console.error("Login Error:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+}
+
+
+export default { sendOTP, validateSignup, validateLogin };
