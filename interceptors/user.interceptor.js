@@ -3,15 +3,15 @@ import { supabase } from "../supabase.js";
 
 // SIGNUP INTERCEPTOR
 async function validateNewUser(req, res, next) {
-    const { userName, emailID, password, code } = req.body;
+    const { name, email_id, password, rank, code } = req.body;
 
     // Basic field check
-    if (!userName || !code || !emailID || !password) {
-        return res.status(400).json({ error: 'UserName, Email, Password, and OTP are required fields.' });
+    if (!name || !code || !email_id || !password || !rank) {
+        return res.status(400).json({ error: 'UserName, Email, Password, Rank, and OTP are required fields.' });
     }
 
     // Email validation
-    if (!validator.isEmail(emailID)) {
+    if (!validator.isEmail(email_id)) {
         return res.status(400).json({ error: 'Invalid email format.' });
     }
 
@@ -25,7 +25,7 @@ async function validateNewUser(req, res, next) {
         const { data: existingUser, error } = await supabase
             .from('users')
             .select('email_id')
-            .eq('email_id', emailID)
+            .eq('email_id', email_id)
             .maybeSingle();
 
         if (error) {
@@ -46,13 +46,13 @@ async function validateNewUser(req, res, next) {
 
 // LOGIN INTERCEPTOR
 function checkLogin(req, res, next) {
-    const { emailID, password, code } = req.body;
+    const { email_id, password, code } = req.body;
 
-    if (!code || !emailID || !password) {
+    if (!code || !email_id || !password) {
         return res.status(400).json({ error: 'Email, Password, and OTP are required fields.' });
     }
 
-    if (!validator.isEmail(emailID)) {
+    if (!validator.isEmail(email_id)) {
         return res.status(400).json({ error: 'Invalid email format.' });
     }
 
@@ -64,13 +64,13 @@ function checkLogin(req, res, next) {
 }
 
 function validateOtpReq(req, res, next) {
-    const { emailID, purpose } = req.body;
+    const { email_id, password } = req.body;
 
-    if (!emailID || !purpose) {
-        return res.status(400).json({ error: 'Both emailID and purpose are required fields.' });
+    if (!email_id || !password) {
+        return res.status(400).json({ error: 'Both emailID and password are required fields.' });
     }
 
-    if (!validator.isEmail(emailID)) {
+    if (!validator.isEmail(email_id)) {
         return res.status(400).json({ error: 'Invalid email format.' });
     }
 

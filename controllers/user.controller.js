@@ -2,22 +2,22 @@ import jwt from "jsonwebtoken"
 import nodemailer from "nodemailer"
 import bcrypt from "bcrypt"
 import dotenv from "dotenv"
-import { supabase }  from "../supabase.js"
+import { supabase } from "../supabase.js"
 
 dotenv.config();
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
 const createToken = (key) => {
-    return jwt.sign({ key }, process.env.JWT_SECRET, { expiresIn: "30d" });
+  return jwt.sign({ key }, process.env.JWT_SECRET, { expiresIn: "30d" });
 };
 
 const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: process.env.EMAIL,
-        pass: process.env.EMAIL_PASSWORD,
-    },
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL,
+    pass: process.env.EMAIL_PASSWORD,
+  },
 });
 
 // ✅ Step 1: Send OTP
@@ -26,27 +26,37 @@ async function sendOTP(req, res) {
     const { email_id } = req.body;
     if (!email_id) return res.status(400).json({ message: "Email ID is required" });
 
-    const otp = generateOTP();
+    const code = generateOTP();
+    const expiry_time = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-    // Check if already exists
-    const { data: existingTemp } = await supabase
+    const { data: existingTemp, error: selectError } = await supabase
       .from("temp_users")
       .select("*")
       .eq("email_id", email_id)
       .maybeSingle();
 
+    if (selectError) throw selectError;
+
     if (existingTemp) {
-      await supabase.from("temp_users").update({ otp }).eq("email_id", email_id);
+      const { error: updateError } = await supabase
+        .from("temp_users")
+        .update({ code, expiry_time })
+        .eq("email_id", email_id);
+      if (updateError) throw updateError;
     } else {
-      await supabase.from("temp_users").insert([{ email_id, otp }]);
+      const { error: insertError } = await supabase
+        .from("temp_users")
+        .insert([{ email_id, code, expiry_time }]);
+      if (insertError) throw insertError;
     }
 
-    // Send email
+    // console.log("OTP stored successfully ✅");
+
     const mailOptions = {
       from: `"Warje Police Project" <${process.env.EMAIL}>`,
       to: email_id,
       subject: "Your OTP for Signup",
-      text: `Your verification OTP is ${otp}. It is valid for 5 minutes.`,
+      text: `Your verification OTP is ${code}. It is valid for 5 minutes.`,
     };
 
     await transporter.sendMail(mailOptions);
@@ -58,12 +68,13 @@ async function sendOTP(req, res) {
   }
 }
 
+
 // ✅ Step 2: Verify OTP & Signup
 async function validateSignup(req, res) {
   try {
-    const { name, rank, email_id, password, otp } = req.body;
+    const { name, email_id, password, rank, code } = req.body;
 
-    if (!name || !rank || !email_id || !password || !otp)
+    if (!name || !rank || !email_id || !password || !code)
       return res.status(400).json({ message: "All fields are required" });
 
     // Get temp user
@@ -77,13 +88,20 @@ async function validateSignup(req, res) {
       return res.status(400).json({ message: "OTP not found or expired" });
 
     // Check expiry (if expiry_time column exists)
-    if (tempUser.expiry_time && new Date(tempUser.expiry_time) < new Date()) {
+    const now = new Date();
+    const expiry = new Date(tempUser.expiry_time);
+
+    // Adjust the expiry time by adding 5 hours 30 minutes (if your Supabase stores in IST)
+    const adjustedExpiry = new Date(expiry.getTime() + (5.5 * 60 * 60 * 1000));
+
+    if (adjustedExpiry.getTime() < now.getTime()) {
       await supabase.from("temp_users").delete().eq("email_id", email_id);
       return res.status(400).json({ message: "OTP expired. Please request again." });
     }
 
+
     // Check OTP (simple equality since not hashed)
-    if (otp.toString() !== tempUser.otp.toString())
+    if (code.toString() !== tempUser.code.toString())
       return res.status(400).json({ message: "Invalid OTP." });
 
     // Hash password
@@ -102,12 +120,13 @@ async function validateSignup(req, res) {
     // Delete temp user
     await supabase.from("temp_users").delete().eq("email_id", email_id);
 
-    const token = createToken(newUser.email_id);
-
     res.status(201).json({
       message: "User created successfully",
-      token,
-      user: newUser,
+      // user: newUser,
+      user: {
+        "user_id": newUser.user_id,
+        "name": newUser.name
+      }
     });
   } catch (error) {
     console.error("Signup Error:", error);
