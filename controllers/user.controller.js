@@ -23,9 +23,9 @@ const transporter = nodemailer.createTransport({
 // ✅ Step 1: Send OTP
 async function sendOTP(req, res) {
   try {
-    const { email_id, purpose } = req.body;
-    if (!email_id || !purpose)
-      return res.status(400).json({ message: "Email ID and purpose are required" });
+    const { email_id, password, purpose } = req.body;
+    if (!email_id || !purpose || !password)
+      return res.status(400).json({ message: "Email ID, Password and purpose are required" });
 
     // ✅ Validate purpose
     if (!["signup", "login"].includes(purpose.toLowerCase()))
