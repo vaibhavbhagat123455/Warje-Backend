@@ -49,8 +49,8 @@ async function sendOTP(req, res) {
         .update({ code, expiry_time, purpose })
         .eq("email_id", email_id);
       if (updateError) throw updateError;
-    } 
-    
+    }
+
     else {
       const { error: insertError } = await supabase
         .from("temp_users")
@@ -101,6 +101,18 @@ async function validateSignup(req, res) {
       .select("*")
       .eq("email_id", email_id)
       .single();
+
+    if (tempError) {
+      // Check if the error is specifically because 0 rows were found
+      if (tempError.code === 'PGRST116') {
+        // This is the "email not found" case.
+        return res.status(404).json({ message: "Email address not found." });
+      }
+
+      // It's some other, unexpected database error
+      console.error("Error:", tempError); // Log the real error for debugging
+      return res.status(500).json({ message: "An internal server error occurred." });
+    }
 
     if (tempError || !tempUser)
       return res.status(400).json({ message: "OTP not found or expired" });
