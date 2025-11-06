@@ -47,7 +47,7 @@ async function createNewCase(req, res) {
             assigned_officer_id, 
         };
 
-        // 🚨 STEP 3: Execute the insert query
+        //Execute the insert query
         const { data: insertedCase, error: insertError } = await supabase
             .from("Cases")
             .insert([newCaseData])

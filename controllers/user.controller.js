@@ -203,7 +203,6 @@ async function validateSignup(req, res) {
 			message: "User created successfully",
 			// user: newUser,
 			user: {
-				"user_id": newUser.user_id,
 				"name": newUser.name
 			}
 		});
