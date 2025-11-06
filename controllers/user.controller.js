@@ -79,7 +79,6 @@ async function sendOTP(req, res) {
 			}
 
 		}
-		console.log(userName)
 		//Email subject/message based on purpose
 		const subjectText = purpose === "signup"
 			? "Your Verification Code for Signup"
