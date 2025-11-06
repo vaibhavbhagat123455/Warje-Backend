@@ -4,12 +4,26 @@
     {
       "src": "index.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "cleanup-otp.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
+      "src": "/cleanup-otp",
+      "dest": "cleanup-otp.js"
+    },
+    {
       "src": "/(.*)",
       "dest": "index.js"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/cleanup-otp",
+      "schedule": "0 * * * *" 
     }
   ]
 }

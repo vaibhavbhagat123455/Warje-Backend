@@ -20,7 +20,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// ✅ Step 1: Send OTP
+// Send OTP
 async function sendOTP(req, res) {
   try {
     const { email_id, purpose } = req.body;
@@ -82,12 +82,12 @@ async function sendOTP(req, res) {
       message: `OTP sent successfully to ${email_id} for ${purpose}`,
     });
   } catch (error) {
-    console.error("OTP Error:", error);
+    console.log("OTP Error:", error);
     res.status(500).json({ message: "Failed to send OTP" });
   }
 }
 
-// ✅ Step 2: Verify OTP & Signup
+// Verify OTP & Signup
 async function validateSignup(req, res) {
   try {
     const { name, email_id, password, rank, code } = req.body;
@@ -164,7 +164,7 @@ async function validateSignup(req, res) {
   }
 }
 
-// ✅ Step 3: Login User
+// Login User
 async function validateLogin(req, res) {
   try {
     const { email_id, password } = req.body;
@@ -206,5 +206,35 @@ async function validateLogin(req, res) {
   }
 }
 
+async function cleanupExpiredTempUsers() {
+    try {
+        // We compare the 'expiry_time' column (which is UTC)
+        // against the current time in UTC (new Date().toISOString()).
+        const nowUTC = new Date().toISOString();
 
+        const { count, error } = await supabase
+            .from("temp_users")
+            .delete()
+            .lt("expiry_time", nowUTC) // 'lt' stands for "less than"
+            .select("*", { count: "exact" });
+            // Note: .delete().eq() returns the deleted rows' data,
+            // or you can use .select() with { count: "exact" } to get the count.
+
+        if (error) {
+            console.error("Supabase Cleanup Error:", error);
+            // Optionally: Send an alert/email if cleanup fails
+            return false;
+        }
+
+        console.log(`Successfully cleaned up ${count} expired temp_users entries.`);
+        return true;
+
+    } catch (error) {
+        console.error("Cleanup function failed:", error);
+        return false;
+    }
+}
+
+// Example usage (You would typically schedule this with a cron package like 'node-cron')
+// cleanupExpiredTempUsers();
 export default { sendOTP, validateSignup, validateLogin };
