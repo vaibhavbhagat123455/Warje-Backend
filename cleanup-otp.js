@@ -1,8 +1,7 @@
 import { supabase } from "./supabase.js";
 
 async function cleanupExpiredTempUsers(req, res) {
-    // SECURITY: Ensure this endpoint can ONLY be hit by Vercel's cron job secret
-    // This is CRITICAL to prevent unauthorized users from running the cleanup.
+
     if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
         return res.status(401).json({ message: 'Unauthorized: Invalid cron secret.' });
     }
