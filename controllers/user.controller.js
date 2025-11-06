@@ -207,34 +207,38 @@ async function validateLogin(req, res) {
 }
 
 async function cleanupExpiredTempUsers() {
-    try {
-        // We compare the 'expiry_time' column (which is UTC)
-        // against the current time in UTC (new Date().toISOString()).
-        const nowUTC = new Date().toISOString();
+  try {
+    // We compare the 'expiry_time' column (which is UTC)
+    // against the current time in UTC (new Date().toISOString()).
+    const nowUTC = new Date().toISOString();
 
-        const { count, error } = await supabase
-            .from("temp_users")
-            .delete()
-            .lt("expiry_time", nowUTC) // 'lt' stands for "less than"
-            .select("*", { count: "exact" });
-            // Note: .delete().eq() returns the deleted rows' data,
-            // or you can use .select() with { count: "exact" } to get the count.
+    const { count, error } = await supabase
+      .from("temp_users")
+      .delete()
+      .lt("expiry_time", nowUTC) // 'lt' stands for "less than"
+      .select("*", { count: "exact" });
+    // Note: .delete().eq() returns the deleted rows' data,
+    // or you can use .select() with { count: "exact" } to get the count.
 
-        if (error) {
-            console.error("Supabase Cleanup Error:", error);
-            // Optionally: Send an alert/email if cleanup fails
-            return false;
-        }
-
-        console.log(`Successfully cleaned up ${count} expired temp_users entries.`);
-        return true;
-
-    } catch (error) {
-        console.error("Cleanup function failed:", error);
-        return false;
+    if (error) {
+      console.error("Supabase Cleanup Error:", error);
+      // Optionally: Send an alert/email if cleanup fails
+      return false;
     }
+
+    console.log(`Successfully cleaned up ${count} expired temp_users entries.`);
+    return true;
+
+  } catch (error) {
+    console.error("Cleanup function failed:", error);
+    return false;
+  }
+}
+
+function logoutUser(req, res) {
+  res.status(200).json({ message: 'Successfully logged out' });
 }
 
 // Example usage (You would typically schedule this with a cron package like 'node-cron')
 // cleanupExpiredTempUsers();
-export default { sendOTP, validateSignup, validateLogin };
+export default { sendOTP, validateSignup, validateLogin, logoutUser };
