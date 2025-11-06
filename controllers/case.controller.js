@@ -74,6 +74,38 @@ async function createNewCase(req, res) {
     }
 }
 
+async function getTotalCasesAssigned(req, res) {
+    try {
+        const officerId = req.params.id; 
+
+        // Supabase Query to Count Cases
+        const { data, count, error } = await supabase
+            .from('cases')
+            .select('*', { count: 'exact' }) // Set count: 'exact' here
+            .eq('assigned_officer_id', officerId);
+            
+
+        if (error) {
+            console.error("Error:", error);
+            return res.status(500).json({ 
+                message: "Failed to fetch case count due to database error." 
+            });
+        }
+        
+        res.status(200).json({
+            officer_id: officerId,
+            total_cases_assigned: count
+        });
+
+    } catch (error) {
+        console.error("Error:", error);
+        res.status(500).json({ 
+            message: "Internal server error while retrieving case count." 
+        });
+    }
+}
+
 export default {
-    createNewCase
+    createNewCase,
+    getTotalCasesAssigned
 }
