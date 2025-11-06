@@ -42,6 +42,26 @@ function validateNewCase(req, res, next) {
     next();
 }
 
+function validateOfficerId(req, res, next) {
+    // Access the ID from the route parameters
+    const officerId = req.params.id;
+    
+    // Regex for basic UUID format check
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (!officerId || !uuidRegex.test(officerId)) {
+        return res.status(400).json({ 
+            message: "Invalid officer ID format. Must be a valid UUID." 
+        });
+    }
+
+    // Attach the validated ID to the request body for easy controller access (optional)
+    req.body.assigned_officer_id = officerId;
+    
+    next();
+}
+
 export default {
-    validateNewCase
+    validateNewCase,
+    validateOfficerId
 };

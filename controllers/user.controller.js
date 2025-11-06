@@ -243,6 +243,7 @@ async function validateLogin(req, res) {
 			message: "Login successful",
 			token,
 			user: {
+				id : user.user_id,
 				name: user.name,
 				rank: user.rank,
 				email_id: user.email_id,

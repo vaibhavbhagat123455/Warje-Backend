@@ -49,7 +49,7 @@ async function createNewCase(req, res) {
 
         //Execute the insert query
         const { data: insertedCase, error: insertError } = await supabase
-            .from("Cases")
+            .from("cases")
             .insert([newCaseData])
             .select('case_id, case_number, title, status, created_at, assigned_officer_id')
             .single();
@@ -64,7 +64,6 @@ async function createNewCase(req, res) {
 
         res.status(201).json({
             message: "New case created successfully.",
-            case: insertedCase,
         });
 
     } catch (error) {
