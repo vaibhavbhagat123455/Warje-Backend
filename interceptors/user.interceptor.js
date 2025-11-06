@@ -20,6 +20,10 @@ async function validateNewUser(req, res, next) {
         return res.status(400).json({ error: 'OTP must be exactly 4 digits.' });
     }
 
+    if (rank != "constable" && rank != "senior inspector" && rank != "inspector" && rank != "investigating officier") {
+        return res.status(400).json({ error : 'Rank must be constable, senior inspector, inspector or investigating officier'})
+    }
+
     try {
         // Check if the user already exists in main users table
         const { data: existingUser, error } = await supabase
