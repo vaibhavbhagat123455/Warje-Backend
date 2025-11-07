@@ -1,6 +1,5 @@
 import validator from "validator";
 import { supabase } from "../supabase.js";
-import { errorMonitor } from "nodemailer/lib/xoauth2/index.js";
 
 // SIGNUP INTERCEPTOR
 async function validateSignup(req, res, next) {
