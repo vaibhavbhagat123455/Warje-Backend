@@ -1,9 +1,12 @@
 import express from "express"
 import caseController from "../controllers/case.controller.js"
 import caseIntercetor from "../interceptors/case.interceptor.js"
-import { checkTokenRefresh } from "../interceptors/checkTokenRefresh.js"
+import { verifyToken } from "../interceptors/verifyToken.js"
+import { checkTokenRefresh } from "../interceptors/checkTokenRefresh.js" 
 
 const router = express.Router()
+
+router.use(verifyToken);
 
 router.use(checkTokenRefresh);
 

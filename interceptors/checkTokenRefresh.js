@@ -1,45 +1,34 @@
 import jwt from 'jsonwebtoken';
 
-const TOKEN_LIFESPAN_SECONDS = 30 * 24 * 60 * 60; 
-const REFRESH_THRESHOLD_SECONDS = 7 * 24 * 60 * 60; // Renew if less than 7 days remaining
+const REFRESH_THRESHOLD_SECONDS = 7 * 24 * 60 * 60; 
 
 export function checkTokenRefresh(req, res, next) {
-    // Get the token from the Authorization header 
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return next(); // No token, proceed to authentication check or fail
+    // This middleware only runs if verifyToken (in the previous step) passed.
+    
+    if (!req.user || !req.token) {
+        // Should not happen if the middleware is applied correctly, but good for safety
+        return next(); 
     }
+    
+    const decoded = req.user;
+    
+    const timeRemainingSeconds = decoded.exp - (Date.now() / 1000); 
 
-    const token = authHeader.split(' ')[1]; 
-
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (timeRemainingSeconds < REFRESH_THRESHOLD_SECONDS) {
         
-        const timeRemainingSeconds = decoded.exp - (Date.now() / 1000); 
+        const newPayload = { ...decoded };
+        delete newPayload.iat;
+        delete newPayload.exp;
 
-        if (timeRemainingSeconds < REFRESH_THRESHOLD_SECONDS) {
-            
-            // Generate a NEW token with a renewed 30-day expiry
-            const newToken = jwt.sign(
-                { user_id: decoded.user_id, email: decoded.email },
-                process.env.JWT_SECRET,
-                { expiresIn: '30d' } 
-            );
+        const newToken = jwt.sign(
+            newPayload,
+            process.env.JWT_SECRET,
+            { expiresIn: '30d' } 
+        );
 
-            res.header('X-New-Token', newToken);
-
-            console.log(`Token refreshed for user ${decoded.user_id}.`);
-        }
-
-        req.user = decoded;
-        next();
-
-    } catch (error) {
-        res.header('X-Auth-Status', 'Expired');
-        next();
+        res.header('X-New-Token', newToken);
+        console.log(`Token refreshed and sent for user ${decoded.user_id}.`);
     }
-}
 
-export default {
-    checkTokenRefresh
+    next();
 }
