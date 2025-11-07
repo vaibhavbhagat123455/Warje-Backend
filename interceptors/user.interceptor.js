@@ -81,8 +81,64 @@ function validateOtpReq(req, res, next) {
     next();
 }
 
+async function validateRole(req, res, next) {
+    const currentUser = req.user; 
+    
+    const { target_email_id, new_role } = req.body; 
+
+    const ADMIN_ROLE = 2;
+
+    if (!currentUser || currentUser.role !== ADMIN_ROLE || !currentUser.is_verified) {
+        console.warn(`Unauthorized role change attempt by user ID: ${currentUser?.user_id}`);
+        return res.status(403).json({ 
+            success: false, 
+            message: "Access Forbidden: Only Administrators can edit roles." 
+        });
+    }
+
+    if (!target_email_id) {
+        return res.status(400).json({
+            success: false,
+            message: "Target user Email ID is mandatory"
+        });
+    }
+
+    if (!new_role) {
+         return res.status(400).json({ 
+            success: false,
+            message: "New role value is required." 
+        });
+    }
+    
+    // Add validation to ensure new_role is 1 or 2
+    if (new_role !== 1 && new_role !== 2) {
+        return res.status(400).json({ 
+            success: false,
+            message: "Invalid role value. Must be 1 (Officer) or 2 (Admin)."
+        });
+    }
+    
+    const { data: targetUser, error: targetError } = await supabase 
+        .from("users")
+        .select("user_id") 
+        .eq("email_id", target_email_id)
+        .single();
+
+    if (targetError && targetError.code !== 'PGRST116') { // "No rows returned"
+        console.error("Supabase error during target user lookup:", targetError.message);
+        return res.status(500).json({ success: false, message: "Internal server error during user check." });
+    }
+
+    if (!targetUser) {
+        return res.status(404).json({ success: false, message: `User with email ${target_email_id} not found.` });
+    }
+
+    next();
+}
+
 export default {
     validateNewUser,
     checkLogin,
-    validateOtpReq
+    validateOtpReq,
+    validateRole
 }

@@ -8,8 +8,19 @@ dotenv.config();
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
-const createToken = (key) => {
-	return jwt.sign({ key }, process.env.JWT_SECRET, { expiresIn: "30d" });
+const createToken = (user) => {
+	const { user_id, role, is_verified, email_id } = user;
+
+	return jwt.sign(
+		{
+			user_id,
+			role,
+			is_verified,
+			email_id
+		},
+		process.env.JWT_SECRET,
+		{ expiresIn: "30d" }
+	);
 };
 
 const transporter = nodemailer.createTransport({
@@ -36,7 +47,7 @@ async function sendOTP(req, res) {
 		}
 
 		let userName = null;
-		if(name) userName = name;
+		if (name) userName = name;
 
 		const code = generateOTP();
 		const expiry_time = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // valid for 5 mins
@@ -243,7 +254,6 @@ async function validateLogin(req, res) {
 			message: "Login successful",
 			token,
 			user: {
-				id : user.user_id,
 				name: user.name,
 				rank: user.rank,
 				email_id: user.email_id,
@@ -255,39 +265,65 @@ async function validateLogin(req, res) {
 	}
 }
 
-async function cleanupExpiredTempUsers() {
-	try {
-		// We compare the 'expiry_time' column (which is UTC)
-		// against the current time in UTC (new Date().toISOString()).
-		const nowUTC = new Date().toISOString();
+async function editRole(req, res) {
+	const { target_email_id, new_role } = req.body;
 
-		const { count, error } = await supabase
-			.from("temp_users")
-			.delete()
-			.lt("expiry_time", nowUTC) // 'lt' stands for "less than"
-			.select("*", { count: "exact" });
-		// Note: .delete().eq() returns the deleted rows' data,
-		// or you can use .select() with { count: "exact" } to get the count.
+	try {
+		// Update Operation
+		const { data: updatedUsers, error } = await supabase
+			.from('users')
+			.update({
+				role: new_role,
+				is_verified: true
+			})
+			.eq('email_id', target_email_id)
+			.select('user_id, email_id, role');
 
 		if (error) {
-			console.error("Supabase Cleanup Error:", error);
-			// Optionally: Send an alert/email if cleanup fails
-			return false;
+			console.error('Error during role update:', error.message);
+			return res.status(500).json({
+				success: false,
+				message: "Database failed to update the user's role."
+			});
 		}
 
-		console.log(`Successfully cleaned up ${count} expired temp_users entries.`);
-		return true;
+		if (!updatedUsers || updatedUsers.length === 0) {
+			return res.status(404).json({
+				success: false,
+				message: `Could not find a user with the email: ${target_email_id}`
+			});
+		}
 
-	} catch (error) {
-		console.error("Cleanup function failed:", error);
-		return false;
+		const updatedUser = updatedUsers[0];
+
+		return res.status(200).json({
+			success: true,
+			message: `Role for user ${updatedUser.email_id} successfully changed to ${updatedUser.role}.`,
+			data: {
+				email_id: updatedUser.email_id,
+				role: updatedUser.role
+			}
+		});
+
+	} catch (e) {
+		console.error('Internal Server Error in editRole:', e.message);
+		return res.status(500).json({
+			success: false,
+			message: "An unexpected error occurred while processing the request."
+		});
 	}
 }
+
 
 function logoutUser(req, res) {
 	res.status(200).json({ message: 'Successfully logged out' });
 }
 
-// Example usage (You would typically schedule this with a cron package like 'node-cron')
-// cleanupExpiredTempUsers();
-export default { sendOTP, validateSignup, validateLogin, logoutUser };
+
+export default {
+	sendOTP,
+	validateSignup,
+	validateLogin,
+	logoutUser,
+	editRole
+};

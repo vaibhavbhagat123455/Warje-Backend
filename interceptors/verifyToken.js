@@ -1,12 +1,12 @@
 import jwt from 'jsonwebtoken';
-import 'dotenv/config'; 
+import 'dotenv/config';
 
 export function verifyToken(req, res, next) {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ 
-            message: 'Authentication failed: No token provided.' 
+        return res.status(401).json({
+            message: 'Authentication failed: No token provided.'
         });
     }
 
@@ -15,13 +15,13 @@ export function verifyToken(req, res, next) {
     jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
         if (err) {
             console.error('JWT Verification Error:', err.message);
-            return res.status(403).json({ 
-                message: 'Authentication failed: Invalid or expired token.' 
+            return res.status(403).json({
+                message: 'Authentication failed: Invalid or expired token.'
             });
         }
-
+        console.log('JWT Decoded Payload (req.user):', decoded);
         req.user = decoded;
-        req.token = token; 
+        req.token = token;
         next();
     });
 }
