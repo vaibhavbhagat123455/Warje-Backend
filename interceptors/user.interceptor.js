@@ -2,7 +2,7 @@ import validator from "validator";
 import { supabase } from "../supabase.js";
 
 // SIGNUP INTERCEPTOR
-async function validateNewUser(req, res, next) {
+async function validateSignup(req, res, next) {
     const { name, email_id, password, rank, code } = req.body;
 
     // Basic field check
@@ -20,8 +20,16 @@ async function validateNewUser(req, res, next) {
         return res.status(400).json({ error: 'OTP must be exactly 4 digits.' });
     }
 
-    if (rank != "constable" && rank != "senior inspector" && rank != "inspector" && rank != "investigating officier") {
-        return res.status(400).json({ error : 'Rank must be constable, senior inspector, inspector or investigating officier'})
+    const ALLOWED_RANKS = [
+        "constable",
+        "senior inspector",
+        "inspector",
+        "investigating officier"
+    ];
+
+
+    if (!ALLOWED_RANKS.includes(rank)) {
+        return res.status(400).json({ error: 'Rank must be constable, senior inspector, inspector or investigating officier' })
     }
 
     try {
@@ -32,13 +40,27 @@ async function validateNewUser(req, res, next) {
             .eq('email_id', email_id)
             .maybeSingle();
 
-        if (error) {
-            console.error('Supabase check error:', error);
-            return res.status(500).json({ error: 'Database check failed.' });
+        const { dt, er } = await supabase
+            .from("temp_users")
+            .select("code, purpose")
+            .eq("email_id", email_id)
+            .single();
+
+        if (error || er) {
+            console.error('check error:', error);
+            return res.status(500).json({ error: 'Database check failed' });
         }
 
         if (existingUser) {
-            return res.status(400).json({ error: 'Email already exists.' });
+            return res.status(400).json({ error: 'Email already exists' });
+        }
+
+        if(dt.code !== code) {
+            return res.status(400).json({ error: "Otp is invalid" });
+        }
+
+        if(dt.purpose !== "signup") {
+            return res.status(400).json({ error: "Purpose is invalid" })
         }
 
         next();
@@ -49,32 +71,8 @@ async function validateNewUser(req, res, next) {
 }
 
 // LOGIN INTERCEPTOR
-async function checkLogin(req, res, next) {
+async function validateLogin(req, res, next) {
     const { email_id, password, code } = req.body;
-
-    const { dt, er } = await supabase 
-			.from("temp_users")
-			.select("code")
-			.eq("email_id", email_id)
-			.single();
-
-    if(dt.code !== code) {
-        return res.status(400).json({ error: "Otp is invalid" });
-    }
-
-    const { data, error } = await supabase 
-            .from("users")
-            .select("is_verified")
-            .eq("email_id", email_id)
-            .single();
-
-    if(er || error) {
-        return res.status(500).json({ error: "Internal server error" });
-    }
-
-    if (!data.is_verified) {
-        return res.json(400).json({ error: "User is not verified" });
-    }
 
     if (!code || !email_id || !password) {
         return res.status(400).json({ error: 'Email, Password, and OTP are required fields.' });
@@ -86,6 +84,35 @@ async function checkLogin(req, res, next) {
 
     if (!/^\d{4}$/.test(code)) {
         return res.status(400).json({ error: 'OTP must be exactly 4 digits.' });
+    }
+
+    const { dt, er } = await supabase
+        .from("temp_users")
+        .select("code, purpose")
+        .eq("email_id", email_id)
+        .single();
+
+    const { data, error } = await supabase
+        .from("users")
+        .select("is_verified")
+        .eq("email_id", email_id)
+        .single();
+
+    if (er || error) {
+        return res.status(500).json({ error: "Internal server error" });
+    }
+
+
+    if (!data.is_verified) {
+        return res.json(400).json({ error: "User is not verified" });
+    }
+
+    if (dt.code !== code) {
+        return res.status(400).json({ error: "Otp is invalid" });
+    }
+
+    if (dt.purpose === "login") {
+        return res.status(400).json({ error: "Purpose is invalid" })
     }
 
     next();
@@ -106,28 +133,28 @@ function validateOtpReq(req, res, next) {
 }
 
 async function validateRole(req, res, next) {
-    const currentUser = req.user; 
-    
-    const { target_email_id, new_role } = req.body; 
+    const currentUser = req.user;
+
+    const { target_email_id, new_role } = req.body;
 
     const ADMIN_ROLE = 2;
 
     const { data, error } = await supabase
-            .from("users")
-            .select("is_verified, role")
-            .eq("user_id", currentUser.user_id)
-            .single();
+        .from("users")
+        .select("is_verified, role")
+        .eq("user_id", currentUser.user_id)
+        .single();
 
-    if(error) {
+    if (error) {
         console.log("Error Occured while retrieving");
         return res.status(500).json({ message: "Internal Server error" });
     }
 
     if (!currentUser || data.role !== ADMIN_ROLE || !data.is_verified) {
         console.warn(`Unauthorized role change attempt by user ID: ${currentUser?.user_id}`);
-        return res.status(403).json({ 
-            success: false, 
-            message: "Access Forbidden: Only Administrators can edit roles." 
+        return res.status(403).json({
+            success: false,
+            message: "Access Forbidden: Only Administrators can edit roles."
         });
     }
 
@@ -139,23 +166,23 @@ async function validateRole(req, res, next) {
     }
 
     if (!new_role) {
-         return res.status(400).json({ 
+        return res.status(400).json({
             success: false,
-            message: "New role value is required." 
+            message: "New role value is required."
         });
     }
-    
+
     // Add validation to ensure new_role is 1 or 2
     if (new_role !== 1 && new_role !== 2) {
-        return res.status(400).json({ 
+        return res.status(400).json({
             success: false,
             message: "Invalid role value. Must be 1 (Officer) or 2 (Admin)."
         });
     }
-    
-    const { data: targetUser, error: targetError } = await supabase 
+
+    const { data: targetUser, error: targetError } = await supabase
         .from("users")
-        .select("user_id") 
+        .select("user_id")
         .eq("email_id", target_email_id)
         .single();
 
@@ -172,8 +199,8 @@ async function validateRole(req, res, next) {
 }
 
 export default {
-    validateNewUser,
-    checkLogin,
+    validateSignup,
+    validateLogin,
     validateOtpReq,
     validateRole
 }
