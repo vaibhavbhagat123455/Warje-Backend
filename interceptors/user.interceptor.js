@@ -55,11 +55,11 @@ async function validateSignup(req, res, next) {
             return res.status(400).json({ error: 'Email already exists' });
         }
 
-        if(dt.code !== code) {
+        if (dt.code !== code) {
             return res.status(400).json({ error: "Otp is invalid" });
         }
 
-        if(dt.purpose !== "signup") {
+        if (dt.purpose !== "signup") {
             return res.status(400).json({ error: "Purpose is invalid" })
         }
 
@@ -77,45 +77,63 @@ async function validateLogin(req, res, next) {
     if (!code || !email_id || !password) {
         return res.status(400).json({ error: 'Email, Password, and OTP are required fields.' });
     }
-
     if (!validator.isEmail(email_id)) {
         return res.status(400).json({ error: 'Invalid email format.' });
     }
-
     if (!/^\d{4}$/.test(code)) {
         return res.status(400).json({ error: 'OTP must be exactly 4 digits.' });
     }
 
-    const { dt, er } = await supabase
-        .from("temp_users")
-        .select("code, purpose")
-        .eq("email_id", email_id)
-        .single();
+    try {
+        const { data: user, error: userError } = await supabase
+            .from("users")
+            .select("is_verified")
+            .eq("email_id", email_id)
+            .single();
 
-    const { data, error } = await supabase
-        .from("users")
-        .select("is_verified")
-        .eq("email_id", email_id)
-        .single();
+        if (userError && userError.code !== 'PGRST116') {
+            console.error("Supabase User Fetch Error:", userError.message);
+            return res.status(500).json({ error: "Internal server error." });
+        }
+        if (!user || userError?.code === 'PGRST116') {
+            return res.status(401).json({ error: "Invalid email or password." });
+        }
 
-    if (er || error) {
-        return res.status(500).json({ error: "Internal server error" });
+        if (!user.is_verified) {
+            return res.status(403).json({ error: "Email Id not verified" });
+        }
+
+        console.log(email_id)
+        const { dt, er } = await supabase
+            .from("temp_users")
+            .select("code, purpose")
+            .eq("email_id", email_id)
+            .single();
+
+        if (er && er.code !== 'PGRST116') {
+            console.error("Supabase OTP Fetch Error:", tempError.message);
+            return res.status(500).json({ error: "Internal server error." });
+        }
+
+        console.log(dtcode)
+        if (!tempUser || tempError?.code === 'PGRST116') {
+            return res.status(400).json({ error: "OTP not found or has expired. Please request a new one." });
+        }
+
+        if (tempUser.code !== code) {
+            return res.status(400).json({ error: "The provided OTP is invalid." });
+        }
+
+        if (tempUser.purpose !== "login") {
+            return res.status(400).json({ error: `OTP purpose is invalid.` });
+        }
+
+        next();
     }
-
-
-    if (!data.is_verified) {
-        return res.json(400).json({ error: "User is not verified" });
+    catch (error) {
+        console.error("Login Error:", error);
+        res.status(500).json({ message: "An unexpected error occurred." });
     }
-
-    if (dt.code !== code) {
-        return res.status(400).json({ error: "Otp is invalid" });
-    }
-
-    if (dt.purpose === "login") {
-        return res.status(400).json({ error: "Purpose is invalid" })
-    }
-
-    next();
 }
 
 function validateOtpReq(req, res, next) {
