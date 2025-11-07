@@ -93,7 +93,6 @@ async function getTotalCasesAssigned(req, res) {
         }
         
         res.status(200).json({
-            officer_id: officerId,
             total_cases_assigned: count
         });
 

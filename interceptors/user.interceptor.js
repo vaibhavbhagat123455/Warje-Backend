@@ -49,8 +49,18 @@ async function validateNewUser(req, res, next) {
 }
 
 // LOGIN INTERCEPTOR
-function checkLogin(req, res, next) {
+async function checkLogin(req, res, next) {
     const { email_id, password, code } = req.body;
+
+    const { data, error } = await supabase 
+            .from("users")
+            .select("is_verified")
+            .eq("email_id", email_id)
+            .single();
+
+    if (!data.is_verified) {
+        return res.json(400).json({ error: "User is not verified" });
+    }
 
     if (!code || !email_id || !password) {
         return res.status(400).json({ error: 'Email, Password, and OTP are required fields.' });
@@ -88,7 +98,18 @@ async function validateRole(req, res, next) {
 
     const ADMIN_ROLE = 2;
 
-    if (!currentUser || currentUser.role !== ADMIN_ROLE || !currentUser.is_verified) {
+    const { data, error } = await supabase
+            .from("users")
+            .select("is_verified, role")
+            .eq("user_id", currentUser.user_id)
+            .single();
+
+    if(error) {
+        console.log("Error Occured while retrieving");
+        return res.status(500).json({ message: "Internal Server error" });
+    }
+
+    if (!currentUser || data.role !== ADMIN_ROLE || !data.is_verified) {
         console.warn(`Unauthorized role change attempt by user ID: ${currentUser?.user_id}`);
         return res.status(403).json({ 
             success: false, 

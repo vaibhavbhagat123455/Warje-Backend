@@ -19,7 +19,6 @@ export function verifyToken(req, res, next) {
                 message: 'Authentication failed: Invalid or expired token.'
             });
         }
-        console.log('JWT Decoded Payload (req.user):', decoded);
         req.user = decoded;
         req.token = token;
         next();

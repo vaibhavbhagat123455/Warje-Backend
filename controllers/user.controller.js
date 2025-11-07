@@ -9,13 +9,12 @@ dotenv.config();
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
 const createToken = (user) => {
-	const { user_id, role, is_verified, email_id } = user;
+	const { user_id, role, email_id } = user;
 
 	return jwt.sign(
 		{
 			user_id,
 			role,
-			is_verified,
 			email_id
 		},
 		process.env.JWT_SECRET,
@@ -148,7 +147,7 @@ async function sendOTP(req, res) {
 }
 
 // Verify OTP & Signup
-async function validateSignup(req, res) {
+async function signup(req, res) {
 	try {
 		const { name, email_id, password, rank, code } = req.body;
 
@@ -224,7 +223,7 @@ async function validateSignup(req, res) {
 }
 
 // Login User
-async function validateLogin(req, res) {
+async function login(req, res) {
 	try {
 		const { email_id, password } = req.body;
 
@@ -248,7 +247,7 @@ async function validateLogin(req, res) {
 			return res.status(400).json({ message: "Invalid email or password" });
 
 		// Generate JWT token
-		const token = createToken(user.email_id);
+		const token = createToken(user);
 
 		res.status(200).json({
 			message: "Login successful",
@@ -322,8 +321,8 @@ function logoutUser(req, res) {
 
 export default {
 	sendOTP,
-	validateSignup,
-	validateLogin,
+	signup,
+	login,
 	logoutUser,
 	editRole
 };
