@@ -161,18 +161,6 @@ async function signup(req, res) {
 			.eq("email_id", email_id)
 			.single();
 
-		if (tempError) {
-			// Check if the error is specifically because 0 rows were found
-			if (tempError.code === 'PGRST116') {
-				// This is the "email not found" case.
-				return res.status(404).json({ message: "Email address not found." });
-			}
-
-			// It's some other, unexpected database error
-			console.error("Error:", tempError); // Log the real error for debugging
-			return res.status(500).json({ message: "An internal server error occurred." });
-		}
-
 		if (tempError || !tempUser)
 			return res.status(400).json({ message: "OTP not found or expired" });
 
@@ -238,16 +226,16 @@ async function login(req, res) {
 			.eq("email_id", email_id)
 			.single();
 
-		if (error || !user)
-			return res.status(400).json({ message: "Invalid email or password" });
+		if (error) {
+			return res.status(500).json({ message: "Internal server error" });
+		}
 
-		// Compare password with hashed password in DB
 		const isMatch = await bcrypt.compare(password, user.password);
 		if (!isMatch)
 			return res.status(400).json({ message: "Invalid email or password" });
 
-		// Generate JWT token
 		const token = createToken(user);
+		await supabase.from("temp_users").delete().eq("email_id", email_id);
 
 		res.status(200).json({
 			message: "Login successful",
