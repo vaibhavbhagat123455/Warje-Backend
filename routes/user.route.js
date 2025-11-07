@@ -10,6 +10,11 @@ router.post("/logout", userController.logoutUser)
 router.post("/sendOtp", userIntercetor.validateOtpReq, userController.sendOTP)
 router.post("/signup", userIntercetor.validateSignup, userController.signup)
 router.post("/login", userIntercetor.validateLogin, userController.login)
-router.post("/editRole", verifyToken, checkTokenRefresh, userIntercetor.validateRole,userController.editRole);
+
+router.use(verifyToken);
+router.use(checkTokenRefresh);
+
+router.post("/editRole", userIntercetor.validateRole, userController.editRole);
+router.post("/editIsVerified", userIntercetor.validateIsVerified, userController.editIsVerified);
 
 export default router

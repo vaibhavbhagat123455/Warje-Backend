@@ -7,7 +7,6 @@ import { checkTokenRefresh } from "../interceptors/checkTokenRefresh.js"
 const router = express.Router()
 
 router.use(verifyToken);
-
 router.use(checkTokenRefresh);
 
 router.post("/createcase", caseIntercetor.validateNewCase, caseController.createNewCase)

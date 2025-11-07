@@ -1,5 +1,6 @@
 import validator from "validator";
 import { supabase } from "../supabase.js";
+import { errorMonitor } from "nodemailer/lib/xoauth2/index.js";
 
 // SIGNUP INTERCEPTOR
 async function validateSignup(req, res, next) {
@@ -108,7 +109,7 @@ async function validateLogin(req, res, next) {
             return res.status(400).json({ error: "Request for new otp" });
         }
 
-        if(!user) {
+        if (!user) {
             return res.status(400).json({ error: "Email Id is not registered" })
         }
 
@@ -153,29 +154,11 @@ async function validateRole(req, res, next) {
 
     const ADMIN_ROLE = 2;
 
-    const { data, error } = await supabase
-        .from("users")
-        .select("is_verified, role")
-        .eq("user_id", currentUser.user_id)
-        .single();
-
-    if (error) {
-        console.log("Error Occured while retrieving");
-        return res.status(500).json({ message: "Internal Server error" });
-    }
-
-    if (!currentUser || data.role !== ADMIN_ROLE || !data.is_verified) {
-        console.warn(`Unauthorized role change attempt by user ID: ${currentUser?.user_id}`);
-        return res.status(403).json({
-            success: false,
-            message: "Access Forbidden: Only Administrators can edit roles."
-        });
-    }
 
     if (!target_email_id) {
         return res.status(400).json({
             success: false,
-            message: "Target user Email ID is mandatory"
+            message: "User Email ID is mandatory"
         });
     }
 
@@ -194,27 +177,96 @@ async function validateRole(req, res, next) {
         });
     }
 
-    const { data: targetUser, error: targetError } = await supabase
-        .from("users")
-        .select("user_id")
-        .eq("email_id", target_email_id)
-        .single();
+    try {
+        const { data: existingUser, error: existingUserError } = await supabase
+            .from("users")
+            .select("is_verified, role")
+            .eq("user_id", currentUser.user_id)
+            .single();
 
-    if (targetError && targetError.code !== 'PGRST116') { // "No rows returned"
-        console.error("Supabase error during target user lookup:", targetError.message);
-        return res.status(500).json({ success: false, message: "Internal server error during user check." });
+        const { data: targetUser, error: targetUserError } = await supabase
+            .from("users")
+            .select("is_verified, role")
+            .eq("email_id", target_email_id)
+            .single();
+
+        if (existingUserError || targetUserError) {
+            return res.status(500).json({ message: "Internal Server error" });
+        }
+
+        if (!existingUser) {
+            return res.status(400).json({ message: "Existing user not found" })
+        }
+
+        if (!targetUserError) {
+            return res.status(400).json({ message: "Target user not found" });
+        }
+
+        if (!targetUser.is_verified || !data.is_verified) {
+            return res.status(400).json({ message: "Email id is not verified" });
+        }
+
+        if (new_role === data.role) {
+            return res.status(400).json({ message: "User already has same role. No update performed" })
+        }
+
+        if (!currentUser || data.role !== ADMIN_ROLE) {
+            return res.status(403).json({
+                success: false,
+                message: "Access Forbidden: Only Administrators can edit roles."
+            });
+        }
+
+        next();
+    }
+    catch (error) {
+        console.error("Login Error:", error);
+        res.status(500).json({ message: "An unexpected error occurred." });
+    }
+}
+
+async function validateIsVerified(req, res, next) {
+    const { email_id, new_verification } = req.body;
+
+    if (!email_id || !new_verification) {
+        return res.status(400).json({ error: "Email id and verification is required" });
     }
 
-    if (!targetUser) {
-        return res.status(404).json({ success: false, message: `User with email ${target_email_id} not found.` });
+    if (new_verification === false) {
+        return res.status(400).json({ error: "Verfication is invalid" });
     }
 
-    next();
+    try {
+        const { data: user, error: userError } = await supabase
+            .from("users")
+            .select("is_verified")
+            .eq("user_id", currentUser.user_id)
+            .single();
+
+        if(userError) {
+            return res.status(500).json({ error: "Internal server error" });
+        }
+
+        if(!user) {
+            return res.status(400).json({ error: "User not found" });
+        }
+    
+        if(user.is_verified === true) {
+            return res.status(400).json({ error: "User already verified" });
+        }
+
+        next();
+    }
+    catch (error) {
+        console.error("Verification Error:", error);
+        res.status(500).json({ message: "An unexpected error occurred." });
+    }
 }
 
 export default {
     validateSignup,
     validateLogin,
     validateOtpReq,
-    validateRole
+    validateRole,
+    validateIsVerified
 }
