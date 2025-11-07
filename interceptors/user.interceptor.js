@@ -52,11 +52,25 @@ async function validateNewUser(req, res, next) {
 async function checkLogin(req, res, next) {
     const { email_id, password, code } = req.body;
 
+    const { dt, er } = await supabase 
+			.from("temp_users")
+			.select("code")
+			.eq("email_id", email_id)
+			.single();
+
+    if(dt.code !== code) {
+        return res.status(400).json({ error: "Otp is invalid" });
+    }
+
     const { data, error } = await supabase 
             .from("users")
             .select("is_verified")
             .eq("email_id", email_id)
             .single();
+
+    if(er || error) {
+        return res.status(500).json({ error: "Internal server error" });
+    }
 
     if (!data.is_verified) {
         return res.json(400).json({ error: "User is not verified" });
