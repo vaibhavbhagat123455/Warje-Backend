@@ -14,7 +14,6 @@ const createToken = (user) => {
 	return jwt.sign(
 		{
 			user_id,
-			role,
 			email_id
 		},
 		process.env.JWT_SECRET,

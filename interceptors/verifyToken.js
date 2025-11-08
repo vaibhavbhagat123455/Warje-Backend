@@ -1,7 +1,8 @@
 import jwt from 'jsonwebtoken';
 import 'dotenv/config';
+import { supabase } from "../supabase.js"
 
-export function verifyToken(req, res, next) {
+export async function verifyToken(req, res, next) {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -12,7 +13,7 @@ export function verifyToken(req, res, next) {
 
     const token = authHeader.split(' ')[1];
 
-    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
         if (err) {
             console.error('JWT Verification Error:', err.message);
             return res.status(403).json({
@@ -20,9 +21,25 @@ export function verifyToken(req, res, next) {
             });
         }
         req.user = decoded;
+
+        const { data: user, error: userError } = await supabase
+            .from("users")
+            .select("user_id")
+            .eq("user_id", req.user.user_id)
+            .single();
+
+        if(userError) {
+            return res.status(500).json({ error: "Internal server error" });
+        }
+
+        if(!user) {
+            return res.status(400).json({ error: "User not found" });
+        }
         req.token = token;
         next();
     });
 }
 
-export default verifyToken;
+export default {
+    verifyToken
+}

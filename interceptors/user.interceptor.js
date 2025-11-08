@@ -153,7 +153,6 @@ async function validateRole(req, res, next) {
 
     const ADMIN_ROLE = 2;
 
-
     if (!target_email_id) {
         return res.status(400).json({
             success: false,
@@ -190,42 +189,45 @@ async function validateRole(req, res, next) {
             .single();
 
         if (existingUserError || targetUserError) {
-            return res.status(500).json({ message: "Internal Server error" });
+            return res.status(500).json({ message: "1Internal Server error" });
         }
 
         if (!existingUser) {
-            return res.status(400).json({ message: "Existing user not found" })
+            return res.status(401).json({ error: "Authenticated user not found in database." });
         }
 
-        if (!targetUserError) {
-            return res.status(400).json({ message: "Target user not found" });
-        }
-
-        if (!targetUser.is_verified || !data.is_verified) {
-            return res.status(400).json({ message: "Email id is not verified" });
-        }
-
-        if (new_role === data.role) {
-            return res.status(400).json({ message: "User already has same role. No update performed" })
-        }
-
-        if (!currentUser || data.role !== ADMIN_ROLE) {
+        if (existingUser.role !== ADMIN_ROLE || !existingUser.is_verified) {
             return res.status(403).json({
                 success: false,
                 message: "Access Forbidden: Only Administrators can edit roles."
             });
         }
 
+        if (!targetUser) {
+            return res.status(400).json({ message: "Target user not found" });
+        }
+
+        if (!targetUser.is_verified) {
+            return res.status(400).json({ message: "Email id is not verified" });
+        }
+
+        if (new_role === targetUser.role) {
+            return res.status(400).json({ message: "User already has same role. No update performed" })
+        }
+
         next();
     }
     catch (error) {
-        console.error("Login Error:", error);
+        console.error("Error:", error);
         res.status(500).json({ message: "An unexpected error occurred." });
     }
 }
 
 async function validateIsVerified(req, res, next) {
+    const currentUser = req.user;
     const { email_id, new_verification } = req.body;
+
+    const ADMIN_ROLE = 2;
 
     if (!email_id || !new_verification) {
         return res.status(400).json({ error: "Email id and verification is required" });
@@ -239,18 +241,35 @@ async function validateIsVerified(req, res, next) {
         const { data: user, error: userError } = await supabase
             .from("users")
             .select("is_verified")
+            .eq("email_id", email_id)
+            .single();
+
+        const { data: existingUser, error: existingUserError } = await supabase
+            .from("users")
+            .select("role, is_verified")
             .eq("user_id", currentUser.user_id)
             .single();
 
-        if(userError) {
-            return res.status(500).json({ error: "Internal server error" });
+        if (userError || existingUserError) {
+            return res.status(500).json({ error: "Internal server error during user lookup" });
         }
 
-        if(!user) {
+        if (!existingUser) {
+            return res.status(401).json({ error: "Authenticated user not found in database." });
+        }
+
+        if (existingUser.role !== ADMIN_ROLE || !existingUser.is_verified) {
+            return res.status(403).json({
+                success: false,
+                message: "Access Forbidden: Only Administrators can edit roles."
+            });
+        }
+
+        if (!user) {
             return res.status(400).json({ error: "User not found" });
         }
-    
-        if(user.is_verified === true) {
+
+        if (user.is_verified === true) {
             return res.status(400).json({ error: "User already verified" });
         }
 
