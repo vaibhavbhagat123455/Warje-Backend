@@ -281,10 +281,12 @@ async function validateIsVerified(req, res, next) {
     }
 }
 
+
+
 export default {
     validateSignup,
     validateLogin,
     validateOtpReq,
     validateRole,
-    validateIsVerified
+    validateIsVerified,
 }

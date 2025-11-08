@@ -8,62 +8,85 @@ async function createNewCase(req, res) {
             priority,
             deadline,
             section_under_ipc,
-            assigned_officer_email 
+            assigned_officer_emails 
         } = req.body;
 
-        let assigned_officer_id = null; 
+        if (!case_number || !title || !priority || !Array.isArray(assigned_officer_emails)) {
+            return res.status(400).json({ 
+                message: "Missing required fields: case_number, title, priority, or assigned_officer_emails array." 
+            });
+        }
+        
+        let officerIds = [];
+        
+        if (assigned_officer_emails && assigned_officer_emails.length > 0) {
+            const cleanEmails = assigned_officer_emails.map(email => email.toLowerCase().trim());
 
-        // Look up the officer's UUID using the email
-        if (assigned_officer_email) {
-            const { data: officer, error: lookupError } = await supabase
+            const { data: officers, error: lookupError } = await supabase
                 .from("users")
-                .select("user_id")
-                .eq("email_id", assigned_officer_email.toLowerCase().trim())
-                .single();
+                .select("user_id, email_id")
+                .in("email_id", cleanEmails)
+                .eq('is_verified', true); 
 
-            // Check for Supabase error where 0 rows were found (no officer with that email)
-            if (lookupError && lookupError.code === 'PGRST116') {
-                return res.status(404).json({ 
-                    message: `Officer with email ${assigned_officer_email} not found in the database.` 
-                });
-            }
-            
-            // Check for other unexpected database errors during lookup
-            if (lookupError) { 
+            if (lookupError) {
                 throw lookupError; 
             }
 
-            // Assign the found UUID
-            assigned_officer_id = officer.user_id;
-        }
+            if (!officers || officers.length !== cleanEmails.length) {
+                
+                const foundVerifiedEmails = new Set(officers.map(o => o.email_id));
 
-        // Construct the data payload using the resolved UUID
+                const missingOrUnverifiedEmails = cleanEmails.filter(email => !foundVerifiedEmails.has(email));
+                
+                return res.status(404).json({ 
+                    message: "One or more assigned officers not found or are not verified.",
+                    missing_or_unverified_officers: missingOrUnverifiedEmails
+                });
+            }
+
+            officerIds = officers.map(officer => officer.user_id);
+        }
         const newCaseData = {
             case_number: case_number.trim(),
             title: title.trim(),
             priority,
             ...(deadline && { deadline }),
             ...(section_under_ipc && { section_under_ipc }),
-            assigned_officer_id, 
         };
 
-        //Execute the insert query
         const { data: insertedCase, error: insertError } = await supabase
             .from("cases")
             .insert([newCaseData])
-            .select('case_id, case_number, title, status, created_at, assigned_officer_id')
+            .select('case_id')
             .single();
-
+        
         if (insertError) {
-            // Handle unique constraint violation (case_number already exists)
             if (insertError.code === '23505') { 
                 return res.status(409).json({ message: "Case Number already exists." });
             }
             throw insertError; 
         }
 
+        const newCaseId = insertedCase.case_id;
+
+        if (officerIds.length > 0) {
+            const joinRecords = officerIds.map(userId => ({
+                case_id: newCaseId,
+                user_id: userId,
+            }));
+            
+            const { error: joinError } = await supabase
+                .from("case_users")
+                .insert(joinRecords);
+
+            if (joinError) {
+                console.error("Error creating join records:", joinError);
+                return res.status(500).json({ message: "Case created but failed to assign officers." });
+            }
+        }
+        
         res.status(201).json({
-            message: "New case created successfully.",
+            message: "New case created and officers assigned successfully.",
         });
 
     } catch (error) {
@@ -76,35 +99,75 @@ async function createNewCase(req, res) {
 
 async function getTotalCasesAssigned(req, res) {
     try {
-        const officerId = req.params.id; 
+        const officerId = req.params.id;
 
         // Supabase Query to Count Cases
         const { data, count, error } = await supabase
             .from('cases')
-            .select('*', { count: 'exact' }) // Set count: 'exact' here
+            .select('*', { count: 'exact' })
             .eq('assigned_officer_id', officerId);
-            
+
 
         if (error) {
             console.error("Error:", error);
-            return res.status(500).json({ 
-                message: "Failed to fetch case count due to database error." 
+            return res.status(500).json({
+                message: "Failed to fetch case count due to database error."
             });
         }
-        
+
         res.status(200).json({
             total_cases_assigned: count
         });
 
     } catch (error) {
         console.error("Error:", error);
-        res.status(500).json({ 
-            message: "Internal server error while retrieving case count." 
+        res.status(500).json({
+            message: "Internal server error while retrieving case count."
         });
+    }
+}
+
+async function getVerifiedUserCasesCount(req, res) {
+    try {
+        const { data: verifiedUsersWithCaseCount, error } = await supabase
+            .from("users")
+            .select(
+                `
+                name,
+                case_users(count)
+                `
+            )
+            .eq('is_verified', true)
+            .order('name', { ascending: true });
+
+        if (error) {
+            console.error("Supabase Error fetching verified users:", error);
+            return res.status(500).json({ success: false, message: "Database query failed." });
+        }
+
+        if (!verifiedUsersWithCaseCount || verifiedUsersWithCaseCount.length === 0) {
+            return res.status(200).json({ success: true, data: [] });
+        }
+
+        const finalData = verifiedUsersWithCaseCount.map(user => ({
+            name: user.name,
+            case_count: user.case_users[0]?.count || 0
+        }));
+
+        return res.status(200).json({
+            success: true,
+            data: finalData
+        });
+    }
+    catch (error) {
+        console.error("Internal Server Error: ", error);
+        return res.status(500).json({ success: false, message: "An unexpected internal server error occurred." });
     }
 }
 
 export default {
     createNewCase,
-    getTotalCasesAssigned
+    getTotalCasesAssigned,
+    getVerifiedUserCasesCount
+
 }

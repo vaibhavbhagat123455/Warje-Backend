@@ -257,7 +257,7 @@ async function editRole(req, res) {
 	try {
 		// Update Operation
 
-		if(!target_email_id || !new_role) {
+		if (!target_email_id || !new_role) {
 			return res.status.json({ error: "Email id and new role is required" });
 		}
 
@@ -312,32 +312,32 @@ function logoutUser(req, res) {
 async function editIsVerified(req, res) {
 	const { email_id, new_verification } = req.body;
 
-    if (!email_id || !new_verification) {
-        return res.status(400).json({ error: "Email id and verification is required" });
-    }
+	if (!email_id || !new_verification) {
+		return res.status(400).json({ error: "Email id and verification is required" });
+	}
 
 	try {
-		const { data: user, error: userError} = await supabase
+		const { data: user, error: userError } = await supabase
 			.from('users')
 			.update({
 				is_verified: new_verification
 			})
 			.eq('email_id', email_id)
 			.select();
-		
-		if(userError) {
-            return res.status(500).json({ error: "Internal server error" });
-        }
 
-        if(!user && user.length === 0) {
-            return res.status(400).json({ error: "User not found" });
-        }
+		if (userError) {
+			return res.status(500).json({ error: "Internal server error" });
+		}
+
+		if (!user && user.length === 0) {
+			return res.status(400).json({ error: "User not found" });
+		}
 
 		return res.status(200).json({ message: "User is now verified" });
 	}
-	catch(error) {
+	catch (error) {
 		res.status(500).json({ message: "An unexpected error occurred." });
-    }
+	}
 }
 
 export default {
@@ -346,5 +346,5 @@ export default {
 	login,
 	logoutUser,
 	editRole,
-	editIsVerified
+	editIsVerified,
 };

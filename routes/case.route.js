@@ -11,6 +11,7 @@ router.use(checkTokenRefresh);
 
 router.post("/createcase", caseIntercetor.validateNewCase, caseController.createNewCase)
 router.post("/totalcasesAssignedTo/:id", caseIntercetor.validateOfficerId, caseController.getTotalCasesAssigned)
+router.post("/getVerifiedUsersCaseCount", caseIntercetor.validateGetVerifiedUserCount, caseController.getVerifiedUserCasesCount);
 
 
 export default router
