@@ -1,23 +1,20 @@
 import express from "express";
 import apiRoutes from "./routes/index.js";
 import dotenv from "dotenv";
+import { apiKeyGuard } from "./apiKeyGuard.js";
 
 dotenv.config();
 
 const app = express();
 
-// Middleware
 app.use(express.json());
 
-// Mount routes
-app.use("/api", apiRoutes);
+app.use("/api", apiRoutes, apiRoutes);
 
-// Basic root route
 app.get("/", (req, res) => {
   res.json({ message: "Warje Police Project API" });
 });
 
-// Handle 404s
 app.use((req, res) => {
   res.status(404).json({
     error: "Not Found",
@@ -25,7 +22,7 @@ app.use((req, res) => {
   });
 });
 
-// Error handler
+
 app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({
@@ -34,7 +31,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server locally (not on Vercel)
 if (process.env.NODE_ENV !== "production") {
   const PORT = process.env.PORT || 8080;
   app.listen(PORT, () => {
@@ -42,5 +38,4 @@ if (process.env.NODE_ENV !== "production") {
   });
 }
 
-// Export app (for Vercel or testing)
 export default app;
