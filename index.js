@@ -9,11 +9,13 @@ const app = express();
 
 app.use(express.json());
 
-app.use("/api", apiRoutes, apiRoutes);
+app.use(apiKeyGuard)
+
+app.use("/api", apiRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Warje Police Project API" });
-}, apiRoutes);
+});
 
 app.use((req, res) => {
   res.status(404).json({
