@@ -281,7 +281,42 @@ async function validateIsVerified(req, res, next) {
     }
 }
 
+async function validateGetVerifiedUsers(req, res, next) {
+    const currentUser = req.user;
+    try {
+        const { data: user, error: userError } = await supabase
+            .from("users")
+            .select("role, is_verified")
+            .eq("user_id", currentUser.user_id)
+            .single();
 
+        if (userError) {
+            return res.status(500).json({ error: "Internal server error during user lookup" });
+        }
+
+        if (!user) {
+            return res.status(401).json({ error: "User not found in database." });
+        }
+
+        const ADMIN_ROLE = 2;
+        if (user.role !== ADMIN_ROLE || !user.is_verified) {
+            return res.status(403).json({
+                success: false,
+                message: "Access Forbidden: Only Administrators can edit roles."
+            });
+        }
+
+        if (!user.is_verified) {
+            return res.status(400).json({ error: "User is not verified" });
+        }
+        
+        next();
+    }
+    catch (error) {
+        console.log("Error: ", error);
+        return res.status(500).json({ error: "Internal server errro" });
+    }
+}
 
 export default {
     validateSignup,
@@ -289,4 +324,5 @@ export default {
     validateOtpReq,
     validateRole,
     validateIsVerified,
+    validateGetVerifiedUsers
 }

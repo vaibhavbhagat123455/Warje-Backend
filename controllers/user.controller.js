@@ -198,7 +198,6 @@ async function signup(req, res) {
 
 		res.status(201).json({
 			message: "User created successfully",
-			// user: newUser,
 			user: {
 				"name": newUser.name
 			}
@@ -336,6 +335,33 @@ async function editIsVerified(req, res) {
 		return res.status(200).json({ message: "User is now verified" });
 	}
 	catch (error) {
+		console.log("Error: ", error)
+		res.status(500).json({ message: "An unexpected error occurred." });
+	}
+}
+
+async function getVerifiedUsers(req, res) {
+	try {
+		const { data: users, error: userError } = await supabase
+			.from("users")
+			.select("name, email_id")
+			.eq("is_verified", true);
+
+		if (userError) {
+			return res.status(500).json({ error: "Internal server error" });
+		}
+
+        if (!users || users.length === 0) {
+            return res.status(404).json({ success: false, message: "No verified users found." });
+        }
+
+        return res.status(200).json({
+            success: true, 
+            verifiedUsers: users
+        });
+	}
+	catch (error) {
+		console.log("Error: ", error)
 		res.status(500).json({ message: "An unexpected error occurred." });
 	}
 }
@@ -347,4 +373,5 @@ export default {
 	logoutUser,
 	editRole,
 	editIsVerified,
+	getVerifiedUsers
 };
