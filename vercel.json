@@ -10,22 +10,7 @@
       "use": "@vercel/node"
     }
   ],
-  "routes": [
-    {
-      "src": "/cleanup-otp",
-      "dest": "cleanup-otp.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "index.js"
-    }
-  ],
-  "crons": [
-    {
-      "path": "/cleanup-otp",
-      "schedule": "0 16 * * *"
-    }
-  ],
+
   "headers": [ 
     {
       "source": "/(.*)",
@@ -43,6 +28,22 @@
           "value": "Content-Type, Authorization, X-API-Key" 
         }
       ]
+    }
+  ],
+  "rewrites": [ 
+    {
+      "source": "/cleanup-otp",
+      "destination": "/cleanup-otp.js" 
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.js" 
+    }
+  ],
+  "crons": [
+    {
+      "path": "/cleanup-otp",
+      "schedule": "0 16 * * *"
     }
   ]
 }
