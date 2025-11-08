@@ -13,7 +13,7 @@ app.use("/api", apiRoutes, apiRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Warje Police Project API" });
-});
+}, apiRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
