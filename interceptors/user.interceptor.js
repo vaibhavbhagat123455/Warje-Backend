@@ -39,7 +39,7 @@ async function validateSignup(req, res, next) {
             .maybeSingle();
 
         if (existingUserError) {
-            return res.status(500).json({ error: "Internal server error" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         // User is verified and can do login but he is trying to signup
@@ -55,7 +55,7 @@ async function validateSignup(req, res, next) {
             .maybeSingle();
 
         if (tempErrorOtp) {
-            return res.status(500).json({ error: "Internal server error" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         // No entry in db for the particular user
@@ -81,7 +81,7 @@ async function validateSignup(req, res, next) {
             .maybeSingle();
 
         if (tempError) {
-            return res.status(500).json({ error: "Internal server error" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         // User is already in temp_user means he is not verified
@@ -93,7 +93,7 @@ async function validateSignup(req, res, next) {
 
     } catch (error) {
         console.error('Signup validation error:', error);
-        return res.status(500).json({ error: 'Internal server error.' });
+        return res.status(500).json({ error: 'Internal server error during data processing' });
     }
 }
 
@@ -121,7 +121,7 @@ async function validateLogin(req, res, next) {
             .maybeSingle();
 
         if (tempErrorOtp) {
-            return res.status(500).json({ error: "Internal server error" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         // No entry in temp_users_otp
@@ -148,7 +148,7 @@ async function validateLogin(req, res, next) {
 
         if (tempError) {
             console.log("login error2: ", tempError)
-            return res.status(500).json({ error: "Internal server error" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         if (tempUser) {
@@ -159,7 +159,7 @@ async function validateLogin(req, res, next) {
     }
     catch (error) {
         console.error("Login Validation Error:", error);
-        res.status(500).json({ message: "An unexpected error occurred." });
+        res.status(500).json({ message: "Internal server error during data processing" });
     }
 }
 
@@ -205,7 +205,7 @@ async function validateRole(req, res, next) {
             .maybeSingle();
 
         if (existingUserError) {
-            return res.status(500).json({ message: "Internal Server error" });
+            return res.status(500).json({ message: "Internal server error during data processing" });
         }
 
         // If Admin or SI not found in db // and role is not amdin
@@ -221,7 +221,7 @@ async function validateRole(req, res, next) {
             .maybeSingle();
 
         if (targetUserError) {
-            return res.status(500).json({ message: "Internal Server error" });
+            return res.status(500).json({ message: "Internal server error during data processing" });
         }
 
         // If target user not found in users
@@ -238,7 +238,7 @@ async function validateRole(req, res, next) {
     }
     catch (error) {
         console.error("Role Error:", error);
-        res.status(500).json({ message: "An unexpected error occurred." });
+        res.status(500).json({ message: "Internal server error during data processing" });
     }
 }
 
@@ -261,7 +261,7 @@ async function validateMakeUserVerified(req, res, next) {
             .maybeSingle();
 
         if (userNotVerifiedError) {
-            return res.status(500).json({ error: "Internal server error" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         // These means user is already verified
@@ -277,7 +277,7 @@ async function validateMakeUserVerified(req, res, next) {
             .maybeSingle();
             
         if (existingUserError) {
-            return res.status(500).json({ error: "Internal server error" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         // Admin or SI not found in db
@@ -298,7 +298,7 @@ async function validateMakeUserVerified(req, res, next) {
             .maybeSingle();
 
         if (tempUserError) {
-            return res.status(500).json({ error: "Internal server error" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         // Target user is not found in temp_users db
@@ -310,7 +310,7 @@ async function validateMakeUserVerified(req, res, next) {
     }
     catch (error) {
         console.error("Verification Error:", error);
-        res.status(500).json({ message: "An unexpected error occurred." });
+        res.status(500).json({ message: "Internal server error during data processing" });
     }
 }
 
@@ -324,7 +324,7 @@ async function validateGetVerifiedUsers(req, res, next) {
             .maybeSingle();
 
         if (userError) {
-            return res.status(500).json({ error: "Internal server error during user lookup" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         // SI or admin not found in db
@@ -341,7 +341,7 @@ async function validateGetVerifiedUsers(req, res, next) {
     }
     catch (error) {
         console.log("Verified Users validation error: ", error);
-        return res.status(500).json({ error: "Internal server errro" });
+        return res.status(500).json({ error: "Internal server error during data processing" });
     }
 }
 

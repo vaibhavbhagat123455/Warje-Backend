@@ -56,7 +56,7 @@ async function validateNewCase(req, res, next) {
             .maybeSingle();
 
         if (userError) {
-            return res.status(500).json({ error: "Internal server error" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         // if SI or Admin is not present in db
@@ -68,7 +68,7 @@ async function validateNewCase(req, res, next) {
     }
     catch (error) {
         console.error("New Case Validation Error: ", error)
-        return res.status(500).json({ error: "Internal server error" });
+        return res.status(500).json({ error: "Internal server error during data processing" });
     }
 }
 
@@ -94,7 +94,7 @@ async function validateTotalCaseCount(req, res, next) {
             .maybeSingle();
 
         if (userError) {
-            return res.status(500).json({ error: "Internal server error" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         // Admin or user not found
@@ -106,7 +106,7 @@ async function validateTotalCaseCount(req, res, next) {
     }
     catch (error) {
         console.error("Get total cases count validation error ", error)
-        return res.status(500).json({ error: "Internal server error" });
+        return res.status(500).json({ error: "Internal server error during data processing" });
     }
 }
 
@@ -121,7 +121,7 @@ async function validateGetUserCasesCount(req, res, next) {
             .maybeSingle();
 
         if (userError) {
-            return res.status(500).json({ error: "Internal server error" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         const ADMIN_ROLE = 2;
@@ -133,7 +133,7 @@ async function validateGetUserCasesCount(req, res, next) {
     }
     catch (error) {
         console.error("Get Users case count validation error: ", error);
-        return res.status(500).json({ error: "Internal server error" });
+        return res.status(500).json({ error: "Internal server error during data processing" });
     }
 }
 

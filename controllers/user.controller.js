@@ -138,7 +138,7 @@ async function sendOTP(req, res) {
 		});
 	} catch (error) {
 		console.log("OTP Error:", error);
-		res.status(500).json({ message: "Failed to send OTP" });
+		res.status(500).json({ message: "Internal server error during data processing" });
 	}
 }
 
@@ -157,7 +157,7 @@ async function signup(req, res) {
 			.single();
 
 		if (tempErrorOtp) {
-			return res.status(500).json({ message: "Internal server error" });
+			return res.status(500).json({ message: "Internal server error during data processing" });
 		}
 
 		// Check expiry 
@@ -186,7 +186,7 @@ async function signup(req, res) {
 			.single();
 
 		if (insertError) {
-			return res.status(500).json({ message: "User creation failed." });
+			return res.status(500).json({ message: "Internal server error during data processing" });
 		}
 
 		res.status(201).json({
@@ -197,7 +197,7 @@ async function signup(req, res) {
 		});
 	} catch (error) {
 		console.error("Signup Error:", error);
-		res.status(500).json({ message: "Internal server error" });
+		res.status(500).json({ message: "Internal server error during data processing" });
 	}
 }
 
@@ -218,7 +218,7 @@ async function login(req, res) {
 			.single();
 
 		if (tempErrorOtp) {
-			return res.status(500).json({ message: "Internal server error" });
+			return res.status(500).json({ message: "Internal server error during data processing" });
 		}
 
 		// Check expiry 
@@ -245,7 +245,7 @@ async function login(req, res) {
 			.maybeSingle();
 
 		if (error) {
-			return res.status(500).json({ message: "Internal server error" });
+			return res.status(500).json({ message: "Internal server error during data processing" });
 		}
 
 		if(!user) {
@@ -271,7 +271,7 @@ async function login(req, res) {
 		});
 	} catch (error) {
 		console.error("Login Error:", error);
-		res.status(500).json({ message: "Internal server error" });
+		res.status(500).json({ message: "Internal server error during data processing" });
 	}
 }
 
@@ -293,7 +293,7 @@ async function editRole(req, res) {
 			.select('user_id, email_id, role');
 
 		if (error) {
-			return res.status(500).json({ error: "Internal server error" });
+			return res.status(500).json({ error: "Internal server error during data processing" });
 		}
 
 		// If is not updated
@@ -310,7 +310,7 @@ async function editRole(req, res) {
 
 	} catch (error) {
 		console.error('Role error', error);
-		return res.status(500).json({ message: "An unexpected error occurred while processing the request." });
+		return res.status(500).json({ message: "Internal server error during data processing" });
 	}
 }
 
@@ -334,7 +334,7 @@ async function makeUserVerified(req, res) {
 			.maybeSingle();
 
 		if (tempUserError) {
-			return res.status(500).json({ error: "Internal server error" });
+			return res.status(500).json({ error: "Internal server error during data processing" });
 		}
 
 		// If no entry found in db
@@ -350,7 +350,7 @@ async function makeUserVerified(req, res) {
 			.single();
 
 		if (insertError) {
-			return res.status(500).json({ message: "User creation failed." });
+			return res.status(500).json({ message: "Internal server error during data processing" });
 		}
 
 		// delete entry from temp_users (Now user is verified)
@@ -360,7 +360,7 @@ async function makeUserVerified(req, res) {
 	}
 	catch (error) {
 		console.error("Verification error: ", error)
-		res.status(500).json({ message: "An unexpected error occurred." });
+		res.status(500).json({ message: "Internal server error during data processing" });
 	}
 }
 
@@ -371,7 +371,7 @@ async function getVerifiedUsers(req, res) {
 			.select("name, email_id");
 
 		if (userError) {
-			return res.status(500).json({ error: "Internal server error" });
+			return res.status(500).json({ error: "Internal server error during data processing" });
 		}
 
 		if (!users || users.length === 0) {
@@ -382,7 +382,7 @@ async function getVerifiedUsers(req, res) {
 	}
 	catch (error) {
 		console.log("Verified users error: ", error)
-		res.status(500).json({ message: "An unexpected error occurred." });
+		res.status(500).json({ message: "Internal server error during data processing" });
 	}
 }
 

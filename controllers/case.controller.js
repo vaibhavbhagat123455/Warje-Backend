@@ -67,7 +67,7 @@ async function createNewCase(req, res) {
             if (insertError.code === '23505') {
                 return res.status(409).json({ message: "Case Number already exists." });
             }
-            throw insertError;
+            return res.status(500).json({ error: "Internal server error during data processing" })
         }
 
         const newCaseId = insertedCase.case_id;
@@ -93,7 +93,7 @@ async function createNewCase(req, res) {
 
     } catch (error) {
         console.error("New Case Error: ", error)
-        return res.status(500).json({ error: "Internal server error" });
+        return res.status(500).json({ error: "Internal server error during data processing" });
     }
 }
 
@@ -110,14 +110,14 @@ async function getTotalCaseCount(req, res) {
 
         if (error) {
             console.log(error)
-            return res.status(500).json({ message: "Internal server error" });
+            return res.status(500).json({ message: "Internal server error during data processing" });
         }
 
         res.status(200).json({ total_cases_assigned: count });
     }
     catch (error) {
         console.error("Get total cases count error:", error);
-        res.status(500).json({ error: "Internal server error" });
+        res.status(500).json({ error: "Internal server error during data processing" });
     }
 }
 
@@ -125,28 +125,24 @@ async function getUserCasesCount(req, res) {
     try {
         const { data, error } = await supabase
             .from('users')
-            .select('name, case_users!inner(count)'); 
-        
+            .select('name, case_users!inner(count)');
+
         if (error) {
             console.log(error)
-            return res.status(500).json({ error: "Internal server error" });
+            return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         const cleanerData = data.map(user => ({
             name: user.name,
-            count: user.case_users?.count || 0
+            // If user.case_users is null/undefined or the array is empty, default to 0.
+            count: user.case_users?.[0]?.count || 0 
         }));
-
-        if (!data || data.length === 0) {
-            return res.status(200).json({ data: [] });
-        }
-        
 
         return res.status(200).json({ data: cleanerData });
     }
     catch (error) {
         console.error("Get Users case count error: ", error);
-        return res.status(500).json({ error: "Internal server error" });
+        return res.status(500).json({ error: "Internal server error during data processing" });
     }
 }
 
