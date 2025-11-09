@@ -38,13 +38,11 @@ async function validateSignup(req, res, next) {
             .eq('email_id', email_id)
             .maybeSingle();
 
-        if (existingUserError) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (existingUserError) throw existingUserError;
 
         // User is verified and can do login but he is trying to signup
         if (existingUser) {
-            return res.status(400).json({ error: 'Email already exists' });
+            return res.status(409).json({ error: 'Email already exists' });
         }
 
         // This query must succeed to allow verification.
@@ -54,23 +52,21 @@ async function validateSignup(req, res, next) {
             .eq('email_id', email_id)
             .maybeSingle();
 
-        if (tempErrorOtp) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (tempErrorOtp) throw tempErrorOtp;
 
         // No entry in db for the particular user
         if (!tempUserOtp) {
-            return res.status(400).json({ error: "Request for new otp" });
+            return res.status(401).json({ error: "Request for new otp" });
         }
 
         // If purpose is invalid
         if (tempUserOtp.purpose !== "signup") {
-            return res.status(400).json({ error: "Invalid purpose" })
+            return res.status(401).json({ error: "Invalid purpose" })
         }
 
         // Otp doesn't match
         if (tempUserOtp.code !== code) {
-            return res.status(400).json({ error: "The provided OTP is invalid." });
+            return res.status(401).json({ error: "The provided OTP is invalid." });
         }
 
         // Already user in temp_users
@@ -80,13 +76,11 @@ async function validateSignup(req, res, next) {
             .eq("email_id", email_id)
             .maybeSingle();
 
-        if (tempError) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (tempError) throw tempError;
 
         // User is already in temp_user means he is not verified
         if (tempUser) {
-            return res.status(400).json({ error: "Email id exists but, user is not verified for login" });
+            return res.status(409).json({ error: "Email id exists but, user is not verified for login" });
         }
 
         next();
@@ -120,23 +114,21 @@ async function validateLogin(req, res, next) {
             .eq('email_id', email_id)
             .maybeSingle();
 
-        if (tempErrorOtp) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (tempErrorOtp) throw tempErrorOtp;
 
         // No entry in temp_users_otp
         if (!tempUserOtp) {
-            return res.status(400).json({ error: "Request for new otp" });
+            return res.status(401).json({ error: "Request for new otp" });
         }
 
         // Otp didn't match
         if (tempUserOtp.code !== code) {
-            return res.status(400).json({ error: "The provided OTP is invalid." });
+            return res.status(401).json({ error: "The provided OTP is invalid." });
         }
 
         // purpose of temp_users_code didn't match
         if (tempUserOtp.purpose !== "login") {
-            return res.status(400).json({ error: `OTP purpose is invalid.` });
+            return res.status(401).json({ error: `OTP purpose is invalid.` });
         }
 
         // data from temp_users_opt
@@ -146,13 +138,10 @@ async function validateLogin(req, res, next) {
             .eq('email_id', email_id)
             .maybeSingle();
 
-        if (tempError) {
-            console.log("login error2: ", tempError)
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (tempError) throw tempError;
 
         if (tempUser) {
-            return res.status(403).json({ error: "User is not verified" });
+            return res.status(401).json({ error: "User is not verified" });
         }
 
         next();
@@ -204,13 +193,16 @@ async function validateRole(req, res, next) {
             .eq("user_id", currentUser.user_id)
             .maybeSingle();
 
-        if (existingUserError) {
-            return res.status(500).json({ message: "Internal server error during data processing" });
+        if (existingUserError) throw existingUserError;
+
+        // If Admin or SI not found in db
+        if(!existingUser) {
+            return res.status(404).json({ error: "Authenticated user not found in database." });
         }
 
-        // If Admin or SI not found in db // and role is not amdin
-        if (!existingUser || existingUser.role !== ADMIN_ROLE) {
-            return res.status(401).json({ error: "Access Forbidden: Only Administrators can edit roles." });
+        // and role is not amdin
+        if (existingUser.role !== ADMIN_ROLE) {
+            return res.status(403).json({ error: "Access Forbidden: Only Administrators can edit user roles." });
         }
 
         // To check target user existence in users table
@@ -220,18 +212,16 @@ async function validateRole(req, res, next) {
             .eq("email_id", target_email_id)
             .maybeSingle();
 
-        if (targetUserError) {
-            return res.status(500).json({ message: "Internal server error during data processing" });
-        }
+        if (targetUserError) throw targetUserError;
 
         // If target user not found in users
         if (!targetUser) {
-            return res.status(400).json({ message: "Target user not found" });
+            return res.status(404).json({ message: "Target user not found" });
         }
 
         // has that role and req for the same role
         if (new_role === targetUser.role) {
-            return res.status(400).json({ message: "User already has same role. No update performed" })
+            return res.status(409).json({ message: "User already has same role. No update performed" })
         }
 
         next();
@@ -266,7 +256,7 @@ async function validateMakeUserVerified(req, res, next) {
 
         // These means user is already verified
         if (userNotVerified) {
-            return res.status(400).json({ error: "User already is verified" });
+            return res.status(409).json({ error: "User already is verified" });
         }
 
         // For admin, SI who has accepted to make these user verified
@@ -276,13 +266,11 @@ async function validateMakeUserVerified(req, res, next) {
             .eq("user_id", currentUser.user_id)
             .maybeSingle();
             
-        if (existingUserError) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (existingUserError) throw existingUserError;
 
         // Admin or SI not found in db
         if (!existingUser) {
-            return res.status(401).json({ error: "Authenticated user not found in database." });
+            return res.status(404).json({ error: "Authenticated user not found in database." });
         }
 
         // admin should have that role
@@ -297,13 +285,11 @@ async function validateMakeUserVerified(req, res, next) {
             .eq("email_id", email_id)
             .maybeSingle();
 
-        if (tempUserError) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (tempUserError) throw tempUserError;
 
         // Target user is not found in temp_users db
         if (!tempUser) {
-            return res.status(401).json({ error: "Target user not found" });
+            return res.status(404).json({ error: "Target user not found" });
         }
 
         next();
@@ -323,13 +309,11 @@ async function validateGetUsers(req, res, next) {
             .eq("user_id", currentUser.user_id)
             .maybeSingle();
 
-        if (userError) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (userError) throw userError;
 
         // user not found in db
         if (!user) {
-            return res.status(401).json({ error: "Authenticated user not found" });
+            return res.status(404).json({ error: "Authenticated user not found" });
         }
 
         next();
@@ -349,13 +333,11 @@ async function validateGetUnverifiedUsers(req, res, next) {
             .eq("user_id", currentUser.user_id)
             .maybeSingle();
 
-        if (userError) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (userError) throw userError;
 
         // SI or admin not found in db
         if (!user) {
-            return res.status(401).json({ error: "Authenticated user not found" });
+            return res.status(404).json({ error: "Authenticated user not found" });
         }
 
         // user is not admin
@@ -367,7 +349,7 @@ async function validateGetUnverifiedUsers(req, res, next) {
         next();
     }
     catch (error) {
-        console.log("Unerified Users validation error: ", error);
+        console.log("Unverified Users validation error: ", error);
         return res.status(500).json({ error: "Internal server error during data processing" });
     }
 }

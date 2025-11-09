@@ -31,78 +31,87 @@ const transporter = nodemailer.createTransport({
 
 // Send OTP
 async function sendOTP(req, res) {
-	try {
-		const { email_id, purpose, name } = req.body;
-		if (!email_id || !purpose) {
-			return res.status(400).json({ message: "Email ID and purpose are required" });
+    try {
+        const { email_id, purpose, name } = req.body;
+        
+        // 400 Bad Request: Missing fields
+        if (!email_id || !purpose)
+            return res.status(400).json({ error: "Email ID and purpose are required" });
+
+        const lowerPurpose = purpose.toLowerCase();
+
+        // 400 Bad Request: Invalid purpose
+        if (!["signup", "login"].includes(lowerPurpose))
+            return res.status(400).json({ error: "Invalid purpose. Must be 'signup' or 'login'." });
+
+        // 400 Bad Request: Name required for signup
+        if (lowerPurpose === 'signup' && !name) {
+            return res.status(400).json({ error: "Name is required for signup." });
+        }
+
+        let userName = name;
+        
+        // --- PRE-CHECKS FOR LOGIN/SIGNUP And Temp Users ---
+        const { data: tempUser, error: tempUserError } = await supabase
+            .from("temp_users")
+            .select("name")
+            .eq("email_id", email_id)
+            .maybeSingle();
+
+		if(tempUserError) throw tempUserError;
+
+		// User is not verified
+		if(tempUser) {
+			return res.status(400).json({ error: "User is not verified" });
 		}
 
-		// Validate purpose
-		if (!["signup", "login"].includes(purpose.toLowerCase())) {
-			return res.status(400).json({ message: "Invalid purpose. Must be 'signup' or 'login'." });
-		}
+        const { data: userRecord, error: userLookupError } = await supabase
+            .from("users")
+            .select("name")
+            .eq("email_id", email_id)
+            .maybeSingle();
 
-		if (purpose.toLowerCase() === 'signup' && !name) {
-			return res.status(400).json({ message: "Name is required for signup." });
-		}
+        if (userLookupError) throw userLookupError; 
 
-		let userName = null;
-		if (name) userName = name;
+        if (lowerPurpose === 'login') {
+            // 404 Not Found: Cannot log in if the user doesn't exist
+            if (!userRecord) {
+                return res.status(404).json({ error: "User not found. Please sign up first." });
+            }
+            userName = userRecord.name;
+        } else if (lowerPurpose === 'signup') {
+            // 409 Conflict: Cannot sign up if the user already exists
+            if (userRecord) {
+                return res.status(409).json({ error: "User already exists. Please log in instead." });
+            }
+        }
+        
+        if (!userName) userName = "User"; 
 
-		const code = generateOTP();
-		const expiry_time = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // valid for 5 mins
+        const code = generateOTP();
+        const expiry_time = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // valid for 5 mins
 
-		// Store or update in Supabase
-		const { data: existingTemp, error: selectError } = await supabase
-			.from("temp_users_otp")
-			.select("*")
-			.eq("email_id", email_id)
-			.maybeSingle();
+        // Upsert logic (insert or update on conflict) - Efficient replacement for select + if/else insert/update
+        const { error: upsertError } = await supabase
+            .from("temp_users_otp")
+            .upsert({ email_id, code, expiry_time, purpose: lowerPurpose }, { onConflict: 'email_id' });
+        
+        if (upsertError) throw upsertError;
 
-		if (selectError) throw selectError;
+        // Email sending logic (unchanged)
+        const subjectText = lowerPurpose === "signup"
+            ? "Your Verification Code for Signup"
+            : "Your One-Time Password for Login";
 
-		if (existingTemp) {
-			const { error: updateError } = await supabase
-				.from("temp_users_otp")
-				.update({ code, expiry_time, purpose })
-				.eq("email_id", email_id);
-			if (updateError) throw updateError;
-		}
+        const mailOptions = {
+            from: process.env.EMAIL,
+            to: email_id,
+            subject: subjectText,
+            text: lowerPurpose === "signup"
+                ? `Your verification OTP for signup is ${code}. It is valid for 5 minutes. DO NOT SHARE THIS CODE.`
+                : `Your OTP for login is ${code}. It is valid for 5 minutes. DO NOT SHARE THIS CODE.`,
 
-		else {
-			const { error: insertError } = await supabase
-				.from("temp_users_otp")
-				.insert([{ email_id, code, expiry_time, purpose }]);
-			if (insertError) throw insertError;
-		}
-
-		if (purpose.toLowerCase() === 'login') {
-			const { data: user, error: userError } = await supabase
-				.from("users")
-				.select("name")
-				.eq("email_id", email_id)
-				.maybeSingle();
-
-			if (!userError && user) {
-				userName = user.name;
-			}
-		}
-		//Email subject/message based on purpose
-		const subjectText = purpose === "signup"
-			? "Your Verification Code for Signup"
-			: "Your One-Time Password for Login";
-
-		const mailOptions = {
-			from: process.env.EMAIL,
-			to: email_id,
-			subject: subjectText,
-
-			// The plain text message for email clients that don't render HTML
-			text: purpose === "signup"
-				? `Your verification OTP for signup is ${code}. It is valid for 5 minutes. DO NOT SHARE THIS CODE.`
-				: `Your OTP for login is ${code}. It is valid for 5 minutes. DO NOT SHARE THIS CODE.`,
-
-			html: `
+            html: `
         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: auto; padding: 20px; border-radius: 8px; background-color: #f9f9f9; border: 1px solid #ddd;">
             
             <div style="text-align: center; background-color: #0a1941ff; padding: 15px; border-radius: 8px 8px 0 0;">
@@ -132,16 +141,18 @@ async function sendOTP(req, res) {
             <p style="color:gray; font-size:12px; text-align: center;">This is an autogenerated message. Please do not reply to this email.</p>
         </div>
     `
-		};
-		await transporter.sendMail(mailOptions);
+        };
+        await transporter.sendMail(mailOptions);
 
-		res.status(200).json({
-			message: `OTP sent successfully to ${email_id} for ${purpose}`,
-		});
-	} catch (error) {
-		console.log("OTP Error:", error);
-		res.status(500).json({ message: "Internal server error during data processing" });
-	}
+        // 200 OK: Email sent successfully
+        res.status(200).json({
+            message: `OTP sent successfully to ${email_id} for ${purpose}`,
+        });
+    } catch (error) {
+        console.error("OTP Error:", error);
+        // 500 Internal Server Error: Catch-all for DB/Mailer errors
+        res.status(500).json({ error: "Internal server error during OTP processing." });
+    }
 }
 
 async function signup(req, res) {
@@ -242,9 +253,7 @@ async function login(req, res) {
 			.eq("email_id", email_id)
 			.single();
 
-		if (tempErrorOtp) {
-			return res.status(500).json({ message: "Internal server error during data processing" });
-		}
+		if (tempErrorOtp) throw tempErrorOtp;
 
 		// Check expiry 
 		const now = new Date();
@@ -269,19 +278,17 @@ async function login(req, res) {
 			.eq("email_id", email_id)
 			.maybeSingle();
 
-		if (error) {
-			return res.status(500).json({ message: "Internal server error during data processing" });
-		}
+		if (error) throw error;
 
 		if (!user) {
-			return res.status(400).json({ error: "Email id is invalid" });
+			return res.status(401).json({ error: "Email id is invalid" });
 		}
 
 		// Password matching
 		const isMatch = await bcrypt.compare(password, user.password);
 
 		if (!isMatch) {
-			return res.status(400).json({ message: "Invalid password" });
+			return res.status(401).json({ message: "Invalid password" });
 		}
 
 		const token = createToken(user);
@@ -317,9 +324,7 @@ async function editRole(req, res) {
 			.eq('email_id', target_email_id)
 			.select('user_id, email_id, role');
 
-		if (error) {
-			return res.status(500).json({ error: "Internal server error during data processing" });
-		}
+		if (error) throw error;
 
 		// If is not updated
 		if (!updatedUsers || updatedUsers.length === 0) {
@@ -358,25 +363,26 @@ async function makeUserVerified(req, res) {
 			.eq("email_id", email_id)
 			.maybeSingle();
 
-		if (tempUserError) {
-			return res.status(500).json({ error: "Internal server error during data processing" });
-		}
+		if (tempUserError) throw tempUserError;
 
 		// If no entry found in db
 		if (!tempUser) {
-			return res.status(400).json({ error: "Target user not found" });
+			return res.status(404).json({ error: "Target user not found" });
 		}
 
 		// Insert user in user
 		const { data: newUser, error: insertError } = await supabase
 			.from("users")
-			.insert([{ name: tempUser.name, rank: tempUser.rank, email_id, password: tempUser.password }])
-			.select()
-			.single();
+			.insert([{ name: tempUser.name, rank: tempUser.rank, email_id, password: tempUser.password }]);
 
 		if (insertError) {
-			return res.status(500).json({ message: "Internal server error during data processing" });
-		}
+             // 409 Conflict: If user already exists (e.g., race condition or re-verification)
+            if (insertError.code === '23505') { 
+                await supabase.from("temp_users").delete().eq("email_id", email_id);
+                return res.status(409).json({ error: "User is already verified. Cleaning up unverified record." });
+            }
+            throw insertError;
+        }
 
 		// delete entry from temp_users (Now user is verified)
 		await supabase.from("temp_users").delete().eq("email_id", email_id);
@@ -395,9 +401,7 @@ async function getUsers(req, res) {
 			.from("users")
 			.select("name, email_id");
 
-		if (userError) {
-			return res.status(500).json({ error: "Internal server error during data processing" });
-		}
+		if (userError) throw userError;
 
 		if (!users || users.length === 0) {
 			return res.status(404).json({ message: "No verified users found." });
@@ -417,9 +421,7 @@ async function getUnverifiedUser(req, res) {
 			.from("temp_users")
 			.select("name, email_id");
 
-		if (userError) {
-			return res.status(500).json({ error: "Internal server error during data processing" });
-		}
+		if (userError) throw userError;
 
 		if (!users || users.length === 0) {
 			return res.status(404).json({ message: "No un-verified users found." });

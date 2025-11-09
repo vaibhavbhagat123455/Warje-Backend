@@ -29,9 +29,7 @@ async function createNewCase(req, res) {
                 .select("user_id, email_id")
                 .in("email_id", cleanEmails);
 
-            if (lookupError) {
-                return res.status(500).json({ error: "Internal server error during data processing" });
-            }
+            if (lookupError) throw lookupError;
 
             // If the number of found officers doesn't match the number of emails provided, some are missing.
             if (!officers || officers.length !== cleanEmails.length) {
@@ -68,7 +66,7 @@ async function createNewCase(req, res) {
             if (insertError.code === '23505') {
                 return res.status(409).json({ message: "Case Number already exists." });
             }
-            return res.status(500).json({ error: "Internal server error during data processing" })
+            throw error;
         }
 
         const newCaseId = insertedCase.case_id;
@@ -86,7 +84,7 @@ async function createNewCase(req, res) {
 
             if (joinError) {
                 console.error("Error creating join records:", joinError);
-                return res.status(500).json({ message: "Case created but failed to assign officers." });
+                throw joinError;
             }
         }
 
@@ -109,9 +107,7 @@ async function getTotalCaseCount(req, res) {
             .eq('user_id', officerId);
 
 
-        if (error) {
-            return res.status(500).json({ message: "Internal server error during data processing" });
-        }
+        if (error) throw error;
 
         res.status(200).json({ total_cases_assigned: count || 0 });
     }
@@ -127,9 +123,7 @@ async function getOfficersCaseCount(req, res) {
             .from('users')
             .select('name, case_users!inner(count)');
 
-        if (error) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (error) throw error;
 
         const cleanerData = data.map(user => ({
             name: user.name,

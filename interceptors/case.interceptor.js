@@ -59,9 +59,7 @@ async function validateNewCase(req, res, next) {
             .eq("user_id", currentUser.user_id)
             .maybeSingle();
 
-        if (userError) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (userError) throw userError;
 
         // if user is not present in db
         if (!user) {
@@ -96,9 +94,7 @@ async function validateTotalCaseCount(req, res, next) {
             .eq("user_id", currentUser.user_id)
             .maybeSingle();
 
-        if (userError) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (userError) throw userError;
 
         //  user not found
         if (!user) {
@@ -123,9 +119,7 @@ async function validateGetOfficersCasesCount(req, res, next) {
             .eq("user_id", currentUser.user_id)
             .maybeSingle();
 
-        if (userError) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        if (userError) throw userError;
 
         if (!user || user.role !== ADMIN_ROLE_ID) {
             return res.status(403).json({ error: "Access Forbidden: Only Administrators can edit roles." });
