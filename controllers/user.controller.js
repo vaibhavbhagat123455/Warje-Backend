@@ -240,7 +240,7 @@ async function login(req, res) {
 		// Find user in users table
 		const { data: user, error } = await supabase
 			.from("users")
-			.select("password, name, email_id")
+			.select("password, name, rank")
 			.eq("email_id", email_id)
 			.single();
 
@@ -262,7 +262,7 @@ async function login(req, res) {
 			token,
 			user: {
 				name: user.name,
-				email_id: user.email_id,
+				rank: user.rank
 			},
 		});
 	} catch (error) {
