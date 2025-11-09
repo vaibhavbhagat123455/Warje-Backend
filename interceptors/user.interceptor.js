@@ -92,8 +92,8 @@ async function validateSignup(req, res, next) {
 
         next();
 
-    } catch (err) {
-        console.error('Signup validation error:', err);
+    } catch (error) {
+        console.error('Signup validation error:', error);
         return res.status(500).json({ error: 'Internal server error.' });
     }
 }
@@ -159,7 +159,7 @@ async function validateLogin(req, res, next) {
         next();
     }
     catch (error) {
-        console.error("Login Error:", error);
+        console.error("Login Validation Error:", error);
         res.status(500).json({ message: "An unexpected error occurred." });
     }
 }
@@ -186,63 +186,51 @@ async function validateRole(req, res, next) {
     const ADMIN_ROLE = 2;
 
     if (!target_email_id) {
-        return res.status(400).json({
-            success: false,
-            message: "User Email ID is mandatory"
-        });
+        return res.status(400).json({ error: "User Email ID is mandatory" });
     }
 
     if (!new_role) {
-        return res.status(400).json({
-            success: false,
-            message: "New role value is required."
-        });
+        return res.status(400).json({ error: "New role value is required." });
     }
 
     // Add validation to ensure new_role is 1 or 2
     if (new_role !== 1 && new_role !== 2) {
-        return res.status(400).json({
-            success: false,
-            message: "Invalid role value. Must be 1 (Officer) or 2 (Admin)."
-        });
+        return res.status(400).json({ message: "Invalid role value. Must be 1 (Officer) or 2 (Admin)." });
     }
 
     try {
         const { data: existingUser, error: existingUserError } = await supabase
             .from("users")
-            .select("is_verified, role")
+            .select("role")
             .eq("user_id", currentUser.user_id)
-            .single();
+            .maybeSingle();
 
+        if (existingUserError) {
+            return res.status(500).json({ message: "Internal Server error" });
+        }
+
+        // If Admin or SI not found in db // and role is not amdin
+        if (!existingUser || existingUser.role !== ADMIN_ROLE) {
+            return res.status(401).json({ error: "Access Forbidden: Only Administrators can edit roles." });
+        }
+
+        // To check target user existence in users table
         const { data: targetUser, error: targetUserError } = await supabase
             .from("users")
-            .select("is_verified, role")
+            .select("role")
             .eq("email_id", target_email_id)
-            .single();
+            .maybeSingle();
 
-        if (existingUserError || targetUserError) {
-            return res.status(500).json({ message: "1Internal Server error" });
+        if (targetUserError) {
+            return res.status(500).json({ message: "Internal Server error" });
         }
 
-        if (!existingUser) {
-            return res.status(401).json({ error: "Authenticated user not found in database." });
-        }
-
-        if (existingUser.role !== ADMIN_ROLE || !existingUser.is_verified) {
-            return res.status(403).json({
-                success: false,
-                message: "Access Forbidden: Only Administrators can edit roles."
-            });
-        }
-
+        // If target user not found in users
         if (!targetUser) {
             return res.status(400).json({ message: "Target user not found" });
         }
 
-        if (!targetUser.is_verified) {
-            return res.status(400).json({ message: "Email id is not verified" });
-        }
-
+        // has that role and req for the same role
         if (new_role === targetUser.role) {
             return res.status(400).json({ message: "User already has same role. No update performed" })
         }
@@ -250,23 +238,19 @@ async function validateRole(req, res, next) {
         next();
     }
     catch (error) {
-        console.error("Error:", error);
+        console.error("Role Error:", error);
         res.status(500).json({ message: "An unexpected error occurred." });
     }
 }
 
 async function validateMakeUserVerified(req, res, next) {
     const currentUser = req.user;
-    const { email_id, new_verification } = req.body;
+    const { email_id } = req.body;
 
     const ADMIN_ROLE = 2;
 
-    if (!email_id || !new_verification) {
+    if (!email_id) {
         return res.status(400).json({ error: "Email id and verification is required" });
-    }
-
-    if (new_verification === false) {
-        return res.status(400).json({ error: "Verfication is invalid" });
     }
 
     try {
@@ -291,23 +275,20 @@ async function validateMakeUserVerified(req, res, next) {
             .from("users")
             .select("role")
             .eq("user_id", currentUser.user_id)
-            .single();
+            .maybeSingle();
             
         if (existingUserError) {
             return res.status(500).json({ error: "Internal server error" });
         }
 
-        // Admin and SI not found in db
+        // Admin or SI not found in db
         if (!existingUser) {
             return res.status(401).json({ error: "Authenticated user not found in database." });
         }
 
         // admin should have that role
         if (existingUser.role !== ADMIN_ROLE) {
-            return res.status(403).json({
-                success: false,
-                message: "Access Forbidden: Only Administrators can edit roles."
-            });
+            return res.status(403).json({ message: "Access Forbidden: Only Administrators can edit roles."});
         }
 
         // To check if the user is in temp_users or not
@@ -315,7 +296,7 @@ async function validateMakeUserVerified(req, res, next) {
             .from("temp_users")
             .select("email_id")
             .eq("email_id", email_id)
-            .single();
+            .maybeSingle();
 
         if (tempUserError) {
             return res.status(500).json({ error: "Internal server error" });
@@ -323,7 +304,7 @@ async function validateMakeUserVerified(req, res, next) {
 
         // Target user is not found in temp_users db
         if (!tempUser) {
-            return res.status(401).json({ error: "Target user not found in database." });
+            return res.status(401).json({ error: "Target user not found" });
         }
 
         next();

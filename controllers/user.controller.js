@@ -142,7 +142,6 @@ async function sendOTP(req, res) {
 	}
 }
 
-// Verify OTP & Signup
 async function signup(req, res) {
 	try {
 		const { name, email_id, password, rank, code } = req.body;
@@ -169,7 +168,7 @@ async function signup(req, res) {
 		const adjustedExpiry = new Date(expiry.getTime() + (5.5 * 60 * 60 * 1000));
 
 		if (adjustedExpiry.getTime() < now.getTime()) {
-			await supabase.from("temp_users").delete().eq("email_id", email_id);
+			await supabase.from("temp_users_otp").delete().eq("email_id", email_id);
 			return res.status(400).json({ message: "OTP expired. Please request again." });
 		}
 
@@ -202,7 +201,6 @@ async function signup(req, res) {
 	}
 }
 
-// Login User
 async function login(req, res) {
 	try {
 		const { email_id, password } = req.body;
@@ -212,10 +210,37 @@ async function login(req, res) {
 			return res.status(400).json({ message: "Email ID and password are required" });
 		}
 
-		// Find user in Supabase
+		// Get temp_user_otp
+		const { data: tempUserOtp, error: tempErrorOtp } = await supabase
+			.from("temp_users_otp")
+			.select("expiry_time")
+			.eq("email_id", email_id)
+			.single();
+
+		if (tempErrorOtp) {
+			return res.status(500).json({ message: "Internal server error" });
+		}
+
+		// Check expiry 
+		const now = new Date();
+		const expiry = new Date(tempUserOtp.expiry_time);
+
+		
+		// Adjust the expiry time by adding 5 hours 30 minutes 
+		const adjustedExpiry = new Date(expiry.getTime() + (5.5 * 60 * 60 * 1000));
+
+		if (adjustedExpiry.getTime() < now.getTime()) {
+			await supabase.from("temp_users_otp").delete().eq("email_id", email_id);
+			return res.status(400).json({ message: "OTP expired. Please request again." });
+		}
+
+		// Delete temp_user_otp
+		await supabase.from("temp_users_otp").delete().eq("email_id", email_id);
+
+		// Find user in users table
 		const { data: user, error } = await supabase
 			.from("users")
-			.select("*")
+			.select("password, name, email_id")
 			.eq("email_id", email_id)
 			.single();
 
@@ -231,7 +256,6 @@ async function login(req, res) {
 		}
 
 		const token = createToken(user);
-		await supabase.from("temp_users_otp").delete().eq("email_id", email_id);
 
 		res.status(200).json({
 			message: "Login successful",
@@ -265,59 +289,46 @@ async function editRole(req, res) {
 			.select('user_id, email_id, role');
 
 		if (error) {
-			console.error('Error during role update:', error.message);
-			return res.status(500).json({
-				success: false,
-				message: "Database failed to update the user's role."
-			});
+			return res.status(500).json({ error: "Internal server error" });
 		}
 
+		// If is not updated
 		if (!updatedUsers || updatedUsers.length === 0) {
-			return res.status(404).json({
-				success: false,
-				message: `Could not find a user with the email: ${target_email_id}`
-			});
+			return res.status(404).json({ message: `Could not find a user with the email: ${target_email_id}` });
 		}
 
+		// target user updation 
 		const updatedUser = updatedUsers[0];
 
 		return res.status(200).json({
-			success: true,
 			message: `Role for user ${updatedUser.email_id} successfully changed to ${updatedUser.role}.`,
-			data: {
-				email_id: updatedUser.email_id,
-				role: updatedUser.role
-			}
 		});
 
-	} catch (e) {
-		console.error('Internal Server Error in editRole:', e.message);
-		return res.status(500).json({
-			success: false,
-			message: "An unexpected error occurred while processing the request."
-		});
+	} catch (error) {
+		console.error('Role error', error);
+		return res.status(500).json({ message: "An unexpected error occurred while processing the request." });
 	}
 }
 
-function logoutUser(req, res) {
+function logout(req, res) {
 	res.status(200).json({ message: 'Successfully logged out' });
 }
 
 
 async function makeUserVerified(req, res) {
-	const { email_id, new_verification } = req.body;
+	const { email_id } = req.body;
 
-	if (!email_id || !new_verification) {
+	if (!email_id) {
 		return res.status(400).json({ error: "Email id and verification is required" });
 	}
 
 	try {
-		// To extract user name
+		// To extract user name, rank, password
 		const { data: tempUser, error: tempUserError } = await supabase
 			.from("temp_users")
 			.select("name, rank, password")
 			.eq("email_id", email_id)
-			.single();
+			.maybeSingle();
 
 		if (tempUserError) {
 			return res.status(500).json({ error: "Internal server error" });
@@ -328,19 +339,19 @@ async function makeUserVerified(req, res) {
 			return res.status(400).json({ error: "Target user not found" });
 		}
 
-		// Hash password
-		const hashedPassword = await bcrypt.hash(tempUser.password, 10);
-
 		// Insert user in user
 		const { data: newUser, error: insertError } = await supabase
 			.from("users")
-			.insert([{ name: tempUser.name, rank: tempUser.rank, email_id, password: hashedPassword }])
+			.insert([{ name: tempUser.name, rank: tempUser.rank, email_id, password: tempUser.password }])
 			.select()
 			.single();
 
 		if (insertError) {
 			return res.status(500).json({ message: "User creation failed." });
 		}
+
+		// delete entry from temp_users (Now user is verified)
+		await supabase.from("temp_users").delete().eq("email_id", email_id);
 
 		return res.status(200).json({ message: "User is now verified" });
 	}
@@ -380,7 +391,7 @@ export default {
 	sendOTP,
 	signup,
 	login,
-	logoutUser,
+	logout,
 	editRole,
 	makeUserVerified,
 	getVerifiedUsers
