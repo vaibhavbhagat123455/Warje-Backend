@@ -33,10 +33,12 @@ async function validateNewCase(req, res, next) {
     }
 
     if (assigned_officer_emails.length > 0) {
+        // Filter the array to find any items that are not strings or are not valid email formats
         const invalidEmails = assigned_officer_emails.filter(email =>
             typeof email !== 'string' || !validator.isEmail(email)
         );
 
+        // If any invalid emails are found, return an error
         if (invalidEmails.length > 0) {
             return res.status(400).json({
                 message: "One or more provided emails are invalid.",
@@ -46,6 +48,7 @@ async function validateNewCase(req, res, next) {
     }
 
     try {
+        // Check if the current user is an administrator
         const { data: user, error: userError } = await supabase
             .from("users")
             .select("role")
@@ -56,6 +59,7 @@ async function validateNewCase(req, res, next) {
             return res.status(500).json({ error: "Internal server error" });
         }
 
+        // if SI or Admin is not present in db
         if (!user) {
             return res.status(401).json({ error: "Access Forbidden: Only Administrators can edit roles" });
         }
@@ -68,7 +72,7 @@ async function validateNewCase(req, res, next) {
     }
 }
 
-async function validateOfficerId(req, res, next) {
+async function validateTotalCaseCount(req, res, next) {
     const currentUser = req.user;
     const officerId = req.params.id;
 
@@ -85,35 +89,31 @@ async function validateOfficerId(req, res, next) {
     try {
         const { data: user, error: userError } = await supabase
             .from("users")
-            .select("role, is_verified")
+            .select("role")
             .eq("user_id", currentUser.user_id)
-            .single();
+            .maybeSingle();
 
         if (userError) {
-            return res.status(500).json({ error: "Internal server error during user lookup" });
+            console.log("H");
+            return res.status(500).json({ error: "Internal server error" });
         }
 
+        // Admin or user not found
         if (!user) {
             return res.status(401).json({ error: "Authenticated user not found in database." });
         }
 
-        if (!user.is_verified) {
-            return res.status(403).json({
-                success: false,
-                message: "Access Forbidden: Only Administrators can edit roles."
-            });
-        }
         next();
     }
     catch (error) {
-        console.log("Error: ", error)
+        console.log("Get total cases count validation error ", error)
         return res.status(500).json({ error: "Internal server error" });
     }
 
     next();
 }
 
-async function validateGetVerifiedUserCount(req, res, next) {
+async function validateotalCaseCount(req, res, next) {
     const currentUser = req.user;
 
     try {
@@ -149,6 +149,5 @@ async function validateGetVerifiedUserCount(req, res, next) {
 
 export default {
     validateNewCase,
-    validateOfficerId,
-    validateGetVerifiedUserCount
+    validateTotalCaseCount
 };

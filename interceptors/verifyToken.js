@@ -34,6 +34,7 @@ export async function verifyToken(req, res, next) {
         }
 
         if(!user) {
+            console.log("verify token:");
             return res.status(400).json({ error: "User not found" });
         }
         

@@ -10,7 +10,8 @@ router.use(verifyToken);
 router.use(checkTokenRefresh);
 
 router.post("/createcase", caseIntercetor.validateNewCase, caseController.createNewCase) // done
-router.post("/totalcasesAssignedTo/:id", caseIntercetor.validateOfficerId, caseController.getTotalCasesAssigned)
-router.post("/getVerifiedUsersCaseCount", caseIntercetor.validateGetVerifiedUserCount, caseController.getVerifiedUserCasesCount);
+// specific user
+router.post("/getTotalCaseCount/:id", caseIntercetor.validateTotalCaseCount, caseController.getTotalCaseCount)
+// router.post("/getUsersCaseCount", caseIntercetor.validateGetVerifiedUserCount, caseController.getVerifiedUserCasesCount);
 
 export default router
