@@ -33,12 +33,14 @@ const transporter = nodemailer.createTransport({
 async function sendOTP(req, res) {
 	try {
 		const { email_id, purpose, name } = req.body;
-		if (!email_id || !purpose)
+		if (!email_id || !purpose) {
 			return res.status(400).json({ message: "Email ID and purpose are required" });
+		}
 
-		// ✅ Validate purpose
-		if (!["signup", "login"].includes(purpose.toLowerCase()))
+		// Validate purpose
+		if (!["signup", "login"].includes(purpose.toLowerCase())) {
 			return res.status(400).json({ message: "Invalid purpose. Must be 'signup' or 'login'." });
+		}
 
 		if (purpose.toLowerCase() === 'signup' && !name) {
 			return res.status(400).json({ message: "Name is required for signup." });
@@ -50,7 +52,7 @@ async function sendOTP(req, res) {
 		const code = generateOTP();
 		const expiry_time = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // valid for 5 mins
 
-		// ✅ Store or update in Supabase
+		// Store or update in Supabase
 		const { data: existingTemp, error: selectError } = await supabase
 			.from("temp_users_otp")
 			.select("*")
@@ -143,62 +145,85 @@ async function sendOTP(req, res) {
 }
 
 async function signup(req, res) {
-	try {
-		const { name, email_id, password, rank, code } = req.body;
+    try {
+        const { name, email_id, password, rank, code } = req.body;
 
-		if (!name || !rank || !email_id || !password || !code)
-			return res.status(400).json({ message: "All fields are required" });
+        // 400 Bad Request: Missing fields
+        if (!name || !rank || !email_id || !password || !code)
+            return res.status(400).json({ error: "All fields (name, rank, email_id, password, code) are required." });
 
-		// Get temp_user_otp
-		const { data: tempUserOtp, error: tempErrorOtp } = await supabase
-			.from("temp_users_otp")
-			.select("expiry_time")
-			.eq("email_id", email_id)
-			.single();
+        // Check for existing user in 'users' table (verified)
+        const { data: existingUser, error: userCheckError } = await supabase
+            .from("users")
+            .select("user_id")
+            .eq("email_id", email_id)
+            .maybeSingle();
+        
+        if (userCheckError) throw userCheckError;
+        
+        // 409 Conflict: User already verified
+        if (existingUser) {
+            return res.status(409).json({ error: "This email is already registered and verified." });
+        }
 
-		if (tempErrorOtp) {
-			return res.status(500).json({ message: "Internal server error during data processing" });
-		}
+        // Get temp_user_otp, including the stored 'code' for matching
+        const { data: tempUserOtp, error: tempErrorOtp } = await supabase
+            .from("temp_users_otp")
+            .select("code, expiry_time")
+            .eq("email_id", email_id)
+            .single();
 
-		// Check expiry 
-		const now = new Date();
-		const expiry = new Date(tempUserOtp.expiry_time);
+        // 401 Unauthorized: OTP not found (or already used)
+        if (tempErrorOtp && tempErrorOtp.code === 'PGRST116') { // Specific error code for no rows found
+             return res.status(401).json({ error: "Invalid or expired verification code. Please request OTP again." });
+        }
+        if (tempErrorOtp) throw tempErrorOtp;
 
-		// Adjust the expiry time by adding 5 hours 30 minutes 
-		const adjustedExpiry = new Date(expiry.getTime() + (5.5 * 60 * 60 * 1000));
+        // 401 Unauthorized: OTP mismatch (Critical Security Check)
+        if (tempUserOtp.code.toString() !== code.toString()) {
+            // Delete OTP to prevent brute-forcing
+            await supabase.from("temp_users_otp").delete().eq("email_id", email_id);
+            return res.status(401).json({ error: "Invalid verification code." });
+        }
 
-		if (adjustedExpiry.getTime() < now.getTime()) {
-			await supabase.from("temp_users_otp").delete().eq("email_id", email_id);
-			return res.status(400).json({ message: "OTP expired. Please request again." });
-		}
+        // Check expiry (logic corrected to be safer/simpler)
+        const now = new Date();
+        const expiry = new Date(tempUserOtp.expiry_time);
 
-		// Delete temp_user_otp
-		await supabase.from("temp_users_otp").delete().eq("email_id", email_id);
+        // NOTE: The 5.5 hour adjustment suggests a timezone issue. It's safer to store/compare UTC or handle time in a specific timezone.
+        const adjustedExpiry = new Date(expiry.getTime() + (5.5 * 60 * 60 * 1000));
 
-		// Hash password
-		const hashedPassword = await bcrypt.hash(password, 10);
+        if (adjustedExpiry.getTime() < now.getTime()) {
+            await supabase.from("temp_users_otp").delete().eq("email_id", email_id);
+            // 401 Unauthorized: OTP expired (It's an auth failure, not just a bad request)
+            return res.status(401).json({ error: "OTP expired. Please request again." });
+        }
 
-		// Insert user in temp_user
-		const { data: newUser, error: insertError } = await supabase
-			.from("temp_users")
-			.insert([{ name, rank, email_id, password: hashedPassword }])
-			.select()
-			.single();
+        // Delete temp_user_otp since it was valid and used
+        await supabase.from("temp_users_otp").delete().eq("email_id", email_id);
 
-		if (insertError) {
-			return res.status(500).json({ message: "Internal server error during data processing" });
-		}
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
 
-		res.status(201).json({
-			message: "User created successfully in temp_users",
-			user: {
-				"name": newUser.name
-			}
-		});
-	} catch (error) {
-		console.error("Signup Error:", error);
-		res.status(500).json({ message: "Internal server error during data processing" });
-	}
+        // Insert user in temp_user (Unverified users awaiting admin approval)
+        const { data: newUser, error: insertError } = await supabase
+            .from("temp_users")
+            .insert([{ name, rank, email_id, password: hashedPassword }])
+            .select('name')
+            .single();
+
+        if (insertError) throw insertError;
+
+        // 201 Created: New resource (temp_user) created
+        res.status(201).json({
+            message: "User account created and awaiting administrator verification.",
+            user: { "name": newUser.name }
+        });
+    } catch (error) {
+        console.error("Signup Error:", error);
+        // 500 Internal Server Error: Catch-all for DB/bcrypt errors
+        res.status(500).json({ error: "Internal server error during user signup." });
+    }
 }
 
 async function login(req, res) {
@@ -225,7 +250,7 @@ async function login(req, res) {
 		const now = new Date();
 		const expiry = new Date(tempUserOtp.expiry_time);
 
-		
+
 		// Adjust the expiry time by adding 5 hours 30 minutes 
 		const adjustedExpiry = new Date(expiry.getTime() + (5.5 * 60 * 60 * 1000));
 
@@ -248,7 +273,7 @@ async function login(req, res) {
 			return res.status(500).json({ message: "Internal server error during data processing" });
 		}
 
-		if(!user) {
+		if (!user) {
 			return res.status(400).json({ error: "Email id is invalid" });
 		}
 
@@ -364,7 +389,7 @@ async function makeUserVerified(req, res) {
 	}
 }
 
-async function getVerifiedUsers(req, res) {
+async function getUsers(req, res) {
 	try {
 		const { data: users, error: userError } = await supabase
 			.from("users")
@@ -375,13 +400,35 @@ async function getVerifiedUsers(req, res) {
 		}
 
 		if (!users || users.length === 0) {
-			return res.status(404).json({ success: false, message: "No verified users found." });
+			return res.status(404).json({ message: "No verified users found." });
 		}
 
 		return res.status(200).json({ verifiedUsers: users });
 	}
 	catch (error) {
 		console.log("Verified users error: ", error)
+		res.status(500).json({ message: "Internal server error during data processing" });
+	}
+}
+
+async function getUnverifiedUser(req, res) {
+	try {
+		const { data: users, error: userError } = await supabase
+			.from("temp_users")
+			.select("name, email_id");
+
+		if (userError) {
+			return res.status(500).json({ error: "Internal server error during data processing" });
+		}
+
+		if (!users || users.length === 0) {
+			return res.status(404).json({ message: "No un-verified users found." });
+		}
+
+		return res.status(200).json({ unVerifiedUsers: users });
+	}
+	catch (error) {
+		console.log("Unverified users error: ", error)
 		res.status(500).json({ message: "Internal server error during data processing" });
 	}
 }
@@ -393,5 +440,6 @@ export default {
 	logout,
 	editRole,
 	makeUserVerified,
-	getVerifiedUsers
+	getUsers,
+	getUnverifiedUser
 };

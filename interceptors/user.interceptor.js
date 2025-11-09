@@ -70,7 +70,7 @@ async function validateSignup(req, res, next) {
 
         // Otp doesn't match
         if (tempUserOtp.code !== code) {
-            return res.status(400).json({ error: "Invalid otp" });
+            return res.status(400).json({ error: "The provided OTP is invalid." });
         }
 
         // Already user in temp_users
@@ -314,7 +314,33 @@ async function validateMakeUserVerified(req, res, next) {
     }
 }
 
-async function validateGetVerifiedUsers(req, res, next) {
+async function validateGetUsers(req, res, next) {
+    const currentUser = req.user;
+    try {
+        const { data: user, error: userError } = await supabase
+            .from("users")
+            .select("role")
+            .eq("user_id", currentUser.user_id)
+            .maybeSingle();
+
+        if (userError) {
+            return res.status(500).json({ error: "Internal server error during data processing" });
+        }
+
+        // user not found in db
+        if (!user) {
+            return res.status(401).json({ error: "Authenticated user not found" });
+        }
+
+        next();
+    }
+    catch (error) {
+        console.log("Verified Users validation error: ", error);
+        return res.status(500).json({ error: "Internal server error during data processing" });
+    }
+}
+
+async function validateGetUnverifiedUsers(req, res, next) {
     const currentUser = req.user;
     try {
         const { data: user, error: userError } = await supabase
@@ -332,6 +358,7 @@ async function validateGetVerifiedUsers(req, res, next) {
             return res.status(401).json({ error: "Authenticated user not found" });
         }
 
+        // user is not admin
         const ADMIN_ROLE = 2;
         if (user.role !== ADMIN_ROLE ) {
             return res.status(403).json({ message: "Access Forbidden: Only Administrators can edit roles."});
@@ -340,7 +367,7 @@ async function validateGetVerifiedUsers(req, res, next) {
         next();
     }
     catch (error) {
-        console.log("Verified Users validation error: ", error);
+        console.log("Unerified Users validation error: ", error);
         return res.status(500).json({ error: "Internal server error during data processing" });
     }
 }
@@ -351,5 +378,6 @@ export default {
     validateOtpReq,
     validateRole,
     validateMakeUserVerified,
-    validateGetVerifiedUsers
+    validateGetUsers,
+    validateGetUnverifiedUsers
 }

@@ -16,6 +16,7 @@ router.use(checkTokenRefresh);
 
 router.post("/editRole", userIntercetor.validateRole, userController.editRole); 
 router.post("/makeUserVerified", userIntercetor.validateMakeUserVerified, userController.makeUserVerified); 
-router.post("/getVerifiedUsers", userIntercetor.validateGetVerifiedUsers, userController.getVerifiedUsers);
+router.post("/getUsers", userIntercetor.validateGetUsers, userController.getUsers);
+router.post("/getUnverifiedUsers", userIntercetor.validateGetUnverifiedUsers, userController.getUnverifiedUser)
 
 export default router

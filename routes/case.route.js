@@ -12,6 +12,6 @@ router.use(checkTokenRefresh);
 router.post("/createcase", caseIntercetor.validateNewCase, caseController.createNewCase) // done
 // specific user
 router.post("/getTotalCaseCount/:user_id", caseIntercetor.validateTotalCaseCount, caseController.getTotalCaseCount) // done
-router.post("/getUsersCaseCount", caseIntercetor.validateGetUserCasesCount, caseController.getUserCasesCount); // done
+router.post("/getUsersCaseCount", caseIntercetor.validateGetOfficersCasesCount, caseController.getOfficersCaseCount); // done
 
 export default router

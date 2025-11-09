@@ -13,7 +13,8 @@ async function createNewCase(req, res) {
 
         if (!case_number || !title || !priority || !Array.isArray(assigned_officer_emails) || !section_under_ipc) {
             return res.status(400).json({
-                message: "Missing required fields: case_number, title, priority, Sections, or assigned_officer_emails array."
+                error: "Missing required fields.",
+                details: "Required fields: case_number, title, priority, section_under_ipc, and assigned_officer_emails (must be an array)."
             });
         }
 
@@ -29,7 +30,7 @@ async function createNewCase(req, res) {
                 .in("email_id", cleanEmails);
 
             if (lookupError) {
-                return res.status(500).json({ error: "Internal server error" });
+                return res.status(500).json({ error: "Internal server error during data processing" });
             }
 
             // If the number of found officers doesn't match the number of emails provided, some are missing.
@@ -102,18 +103,17 @@ async function getTotalCaseCount(req, res) {
         const officerId = req.params.user_id;
 
         // query to count specific user case
-        const { data, count, error } = await supabase
+        const { count, error } = await supabase
             .from('case_users')
-            .select('case_id', { count: 'exact' })
+            .select('user_id', { count: 'exact', head: true }) 
             .eq('user_id', officerId);
 
 
         if (error) {
-            console.log(error)
             return res.status(500).json({ message: "Internal server error during data processing" });
         }
 
-        res.status(200).json({ total_cases_assigned: count });
+        res.status(200).json({ total_cases_assigned: count || 0 });
     }
     catch (error) {
         console.error("Get total cases count error:", error);
@@ -121,20 +121,18 @@ async function getTotalCaseCount(req, res) {
     }
 }
 
-async function getUserCasesCount(req, res) {
+async function getOfficersCaseCount(req, res) {
     try {
         const { data, error } = await supabase
             .from('users')
             .select('name, case_users!inner(count)');
 
         if (error) {
-            console.log(error)
             return res.status(500).json({ error: "Internal server error during data processing" });
         }
 
         const cleanerData = data.map(user => ({
             name: user.name,
-            // If user.case_users is null/undefined or the array is empty, default to 0.
             count: user.case_users?.[0]?.count || 0 
         }));
 
@@ -149,5 +147,5 @@ async function getUserCasesCount(req, res) {
 export default {
     createNewCase,
     getTotalCaseCount,
-    getUserCasesCount
+    getOfficersCaseCount
 }
