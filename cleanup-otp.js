@@ -12,7 +12,7 @@ async function cleanupExpiredTempUsers(req, res) {
         const { count, error } = await supabase
             .from("temp_users")
             .delete()
-            .lt("expiry_time", nowUTC) // 'lt' stands for "less than"
+            .lt("expiry_time", nowUTC) 
             .select("*", { count: "exact" });
             
         if (error) {

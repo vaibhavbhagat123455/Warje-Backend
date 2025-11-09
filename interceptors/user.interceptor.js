@@ -24,51 +24,76 @@ async function validateSignup(req, res, next) {
         "constable",
         "senior inspector",
         "inspector",
-        "investigating officier"
+        "investigating officer"
     ];
-
 
     if (!ALLOWED_RANKS.includes(rank)) {
         return res.status(400).json({ error: 'Rank must be constable, senior inspector, inspector or investigating officier' })
     }
 
     try {
-        // Check if the user already exists in main users table
+        // If a user exists here, they are fully signed up and should not proceed.
         const { data: existingUser, error: existingUserError } = await supabase
             .from('users')
             .select('email_id')
             .eq('email_id', email_id)
             .maybeSingle();
 
-        const { data: tempUser, error: tempError } = await supabase
-            .from('temp_users')
-            .select("code, purpose")
-            .eq('email_id', email_id)
-            .maybeSingle();
-
-        if (existingUserError || tempError) {
+        if (existingUserError) {
             return res.status(500).json({ error: "Internal server error" });
         }
 
-        if (!tempUser) {
-            return res.status(400).json({ error: "Request for new otp" });
-        }
-
-        if (tempUser.code !== code) {
-            return res.status(400).json({ error: "Invalid otp" });
-        }
-
-        if (tempUser.purpose !== "signup") {
-            return res.status(400).json({ error: "Invalid purpose" })
-        }
-
+        // User is verified and can do login but he is trying to signup
         if (existingUser) {
             return res.status(400).json({ error: 'Email already exists' });
         }
 
+        // This query must succeed to allow verification.
+        const { data: tempUserOtp, error: tempErrorOtp } = await supabase
+            .from('temp_users_otp')
+            .select("code, purpose")
+            .eq('email_id', email_id)
+            .maybeSingle();
+
+        if (tempErrorOtp) {
+            return res.status(500).json({ error: "Internal server error" });
+        }
+
+        // No entry in db for the particular user
+        if (!tempUserOtp) {
+            return res.status(400).json({ error: "Request for new otp" });
+        }
+
+        // If purpose is invalid
+        if (tempUserOtp.purpose !== "signup") {
+            return res.status(400).json({ error: "Invalid purpose" })
+        }
+
+        // Otp doesn't match
+        if (tempUserOtp.code !== code) {
+            return res.status(400).json({ error: "Invalid otp" });
+        }
+
+        // Already user in temp_users
+        const { data: tempUser, error: tempError } = await supabase
+            .from("temp_users")
+            .select("email_id")
+            .eq("email_id", email_id)
+            .maybeSingle();
+
+        if (tempError) {
+            return res.status(500).json({ error: "Internal server error" });
+        }
+
+        // User is already in temp_user means he is not verified
+        if (tempUser) {
+            return res.status(400).json({ error: "Email id exists but, user is not verified for login" });
+        }
+
         next();
+
     } catch (err) {
-        console.error('Validation error:', err);
+        console.error('Signup validation error:', err);
         return res.status(500).json({ error: 'Internal server error.' });
     }
 }
@@ -83,45 +108,52 @@ async function validateLogin(req, res, next) {
     if (!validator.isEmail(email_id)) {
         return res.status(400).json({ error: 'Invalid email format.' });
     }
+
     if (!/^\d{4}$/.test(code)) {
         return res.status(400).json({ error: 'OTP must be exactly 4 digits.' });
     }
 
     try {
-        const { data: user, error: userError } = await supabase
-            .from("users")
-            .select("is_verified")
-            .eq("email_id", email_id)
-            .single();
-
-        const { data: tempUser, error: tempError } = await supabase
-            .from('temp_users')
+        // data from temp_users_opt
+        const { data: tempUserOtp, error: tempErrorOtp } = await supabase
+            .from('temp_users_otp')
             .select("code, purpose")
             .eq('email_id', email_id)
             .maybeSingle();
 
-        if (userError || tempError) {
+        if (tempErrorOtp) {
             return res.status(500).json({ error: "Internal server error" });
         }
 
-        if (!tempUser) {
+        // No entry in temp_users_otp
+        if (!tempUserOtp) {
             return res.status(400).json({ error: "Request for new otp" });
         }
 
-        if (!user) {
-            return res.status(400).json({ error: "Email Id is not registered" })
-        }
-
-        if (!user.is_verified) {
-            return res.status(403).json({ error: "Email Id not verified" });
-        }
-
-        if (tempUser.code !== code) {
+        // Otp didn't match
+        if (tempUserOtp.code !== code) {
             return res.status(400).json({ error: "The provided OTP is invalid." });
         }
 
-        if (tempUser.purpose !== "login") {
+        // purpose of temp_users_code didn't match
+        if (tempUserOtp.purpose !== "login") {
             return res.status(400).json({ error: `OTP purpose is invalid.` });
+        }
+
+        // data from temp_users_opt
+        const { data: tempUser, error: tempError } = await supabase
+            .from('temp_users')
+            .select("email_id")
+            .eq('email_id', email_id)
+            .maybeSingle();
+
+        if (tempError) {
+            console.log("login error2: ", tempError)
+            return res.status(500).json({ error: "Internal server error" });
+        }
+
+        if (tempUser) {
+            return res.status(403).json({ error: "User is not verified" });
         }
 
         next();
@@ -223,7 +255,7 @@ async function validateRole(req, res, next) {
     }
 }
 
-async function validateIsVerified(req, res, next) {
+async function validateMakeUserVerified(req, res, next) {
     const currentUser = req.user;
     const { email_id, new_verification } = req.body;
 
@@ -238,39 +270,60 @@ async function validateIsVerified(req, res, next) {
     }
 
     try {
-        const { data: user, error: userError } = await supabase
+        // For existing user who is not verified and checking is verification in users (Is he already verified)
+        const { data: userNotVerified, error: userNotVerifiedError } = await supabase
             .from("users")
-            .select("is_verified")
+            .select("email_id")
             .eq("email_id", email_id)
-            .single();
+            .maybeSingle();
 
-        const { data: existingUser, error: existingUserError } = await supabase
-            .from("users")
-            .select("role, is_verified")
-            .eq("user_id", currentUser.user_id)
-            .single();
-
-        if (userError || existingUserError) {
-            return res.status(500).json({ error: "Internal server error during user lookup" });
+        if (userNotVerifiedError) {
+            return res.status(500).json({ error: "Internal server error" });
         }
 
+        // These means user is already verified
+        if (userNotVerified) {
+            return res.status(400).json({ error: "User already is verified" });
+        }
+
+        // For admin, SI who has accepted to make these user verified
+        const { data: existingUser, error: existingUserError } = await supabase
+            .from("users")
+            .select("role")
+            .eq("user_id", currentUser.user_id)
+            .single();
+            
+        if (existingUserError) {
+            return res.status(500).json({ error: "Internal server error" });
+        }
+
+        // Admin and SI not found in db
         if (!existingUser) {
             return res.status(401).json({ error: "Authenticated user not found in database." });
         }
 
-        if (existingUser.role !== ADMIN_ROLE || !existingUser.is_verified) {
+        // admin should have that role
+        if (existingUser.role !== ADMIN_ROLE) {
             return res.status(403).json({
                 success: false,
                 message: "Access Forbidden: Only Administrators can edit roles."
             });
         }
 
-        if (!user) {
-            return res.status(400).json({ error: "User not found" });
+        // To check if the user is in temp_users or not
+        const { data: tempUser, error: tempUserError } = await supabase
+            .from("temp_users")
+            .select("email_id")
+            .eq("email_id", email_id)
+            .single();
+
+        if (tempUserError) {
+            return res.status(500).json({ error: "Internal server error" });
         }
 
-        if (user.is_verified === true) {
-            return res.status(400).json({ error: "User already verified" });
+        // Target user is not found in temp_users db
+        if (!tempUser) {
+            return res.status(401).json({ error: "Target user not found in database." });
         }
 
         next();
@@ -309,7 +362,7 @@ async function validateGetVerifiedUsers(req, res, next) {
         if (!user.is_verified) {
             return res.status(400).json({ error: "User is not verified" });
         }
-        
+
         next();
     }
     catch (error) {
@@ -323,6 +376,6 @@ export default {
     validateLogin,
     validateOtpReq,
     validateRole,
-    validateIsVerified,
+    validateMakeUserVerified,
     validateGetVerifiedUsers
 }

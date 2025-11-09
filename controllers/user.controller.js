@@ -52,7 +52,7 @@ async function sendOTP(req, res) {
 
 		// ✅ Store or update in Supabase
 		const { data: existingTemp, error: selectError } = await supabase
-			.from("temp_users")
+			.from("temp_users_otp")
 			.select("*")
 			.eq("email_id", email_id)
 			.maybeSingle();
@@ -61,7 +61,7 @@ async function sendOTP(req, res) {
 
 		if (existingTemp) {
 			const { error: updateError } = await supabase
-				.from("temp_users")
+				.from("temp_users_otp")
 				.update({ code, expiry_time, purpose })
 				.eq("email_id", email_id);
 			if (updateError) throw updateError;
@@ -69,14 +69,12 @@ async function sendOTP(req, res) {
 
 		else {
 			const { error: insertError } = await supabase
-				.from("temp_users")
+				.from("temp_users_otp")
 				.insert([{ email_id, code, expiry_time, purpose }]);
 			if (insertError) throw insertError;
 		}
 
 		if (purpose.toLowerCase() === 'login') {
-
-			// THIS IS THE REQUIRED SUPABASE QUERY 
 			const { data: user, error: userError } = await supabase
 				.from("users")
 				.select("name")
@@ -86,7 +84,6 @@ async function sendOTP(req, res) {
 			if (!userError && user) {
 				userName = user.name;
 			}
-
 		}
 		//Email subject/message based on purpose
 		const subjectText = purpose === "signup"
@@ -153,21 +150,22 @@ async function signup(req, res) {
 		if (!name || !rank || !email_id || !password || !code)
 			return res.status(400).json({ message: "All fields are required" });
 
-		// Get temp user
-		const { data: tempUser, error: tempError } = await supabase
-			.from("temp_users")
-			.select("*")
+		// Get temp_user_otp
+		const { data: tempUserOtp, error: tempErrorOtp } = await supabase
+			.from("temp_users_otp")
+			.select("expiry_time")
 			.eq("email_id", email_id)
 			.single();
 
-		if (tempError || !tempUser)
-			return res.status(400).json({ message: "OTP not found or expired" });
+		if (tempErrorOtp) {
+			return res.status(500).json({ message: "Internal server error" });
+		}
 
-		// Check expiry (if expiry_time column exists)
+		// Check expiry 
 		const now = new Date();
-		const expiry = new Date(tempUser.expiry_time);
+		const expiry = new Date(tempUserOtp.expiry_time);
 
-		// Adjust the expiry time by adding 5 hours 30 minutes (if your Supabase stores in IST)
+		// Adjust the expiry time by adding 5 hours 30 minutes 
 		const adjustedExpiry = new Date(expiry.getTime() + (5.5 * 60 * 60 * 1000));
 
 		if (adjustedExpiry.getTime() < now.getTime()) {
@@ -175,29 +173,25 @@ async function signup(req, res) {
 			return res.status(400).json({ message: "OTP expired. Please request again." });
 		}
 
-
-		// Check OTP (simple equality since not hashed)
-		if (code.toString() !== tempUser.code.toString())
-			return res.status(400).json({ message: "Invalid OTP." });
+		// Delete temp_user_otp
+		await supabase.from("temp_users_otp").delete().eq("email_id", email_id);
 
 		// Hash password
 		const hashedPassword = await bcrypt.hash(password, 10);
 
-		// Insert user
+		// Insert user in temp_user
 		const { data: newUser, error: insertError } = await supabase
-			.from("users")
+			.from("temp_users")
 			.insert([{ name, rank, email_id, password: hashedPassword }])
 			.select()
 			.single();
 
-		if (insertError)
+		if (insertError) {
 			return res.status(500).json({ message: "User creation failed." });
-
-		// Delete temp user
-		await supabase.from("temp_users").delete().eq("email_id", email_id);
+		}
 
 		res.status(201).json({
-			message: "User created successfully",
+			message: "User created successfully in temp_users",
 			user: {
 				"name": newUser.name
 			}
@@ -214,8 +208,9 @@ async function login(req, res) {
 		const { email_id, password } = req.body;
 
 		// Check required fields
-		if (!email_id || !password)
+		if (!email_id || !password) {
 			return res.status(400).json({ message: "Email ID and password are required" });
+		}
 
 		// Find user in Supabase
 		const { data: user, error } = await supabase
@@ -228,19 +223,21 @@ async function login(req, res) {
 			return res.status(500).json({ message: "Internal server error" });
 		}
 
+		// Password matching
 		const isMatch = await bcrypt.compare(password, user.password);
-		if (!isMatch)
-			return res.status(400).json({ message: "Invalid email or password" });
+
+		if (!isMatch) {
+			return res.status(400).json({ message: "Invalid password" });
+		}
 
 		const token = createToken(user);
-		await supabase.from("temp_users").delete().eq("email_id", email_id);
+		await supabase.from("temp_users_otp").delete().eq("email_id", email_id);
 
 		res.status(200).json({
 			message: "Login successful",
 			token,
 			user: {
 				name: user.name,
-				rank: user.rank,
 				email_id: user.email_id,
 			},
 		});
@@ -254,12 +251,11 @@ async function editRole(req, res) {
 	const { target_email_id, new_role } = req.body;
 
 	try {
-		// Update Operation
-
 		if (!target_email_id || !new_role) {
 			return res.status.json({ error: "Email id and new role is required" });
 		}
 
+		// Update Operation
 		const { data: updatedUsers, error } = await supabase
 			.from('users')
 			.update({
@@ -308,7 +304,7 @@ function logoutUser(req, res) {
 }
 
 
-async function editIsVerified(req, res) {
+async function makeUserVerified(req, res) {
 	const { email_id, new_verification } = req.body;
 
 	if (!email_id || !new_verification) {
@@ -316,26 +312,40 @@ async function editIsVerified(req, res) {
 	}
 
 	try {
-		const { data: user, error: userError } = await supabase
-			.from('users')
-			.update({
-				is_verified: new_verification
-			})
-			.eq('email_id', email_id)
-			.select();
+		// To extract user name
+		const { data: tempUser, error: tempUserError } = await supabase
+			.from("temp_users")
+			.select("name, rank, password")
+			.eq("email_id", email_id)
+			.single();
 
-		if (userError) {
+		if (tempUserError) {
 			return res.status(500).json({ error: "Internal server error" });
 		}
 
-		if (!user && user.length === 0) {
-			return res.status(400).json({ error: "User not found" });
+		// If no entry found in db
+		if (!tempUser) {
+			return res.status(400).json({ error: "Target user not found" });
+		}
+
+		// Hash password
+		const hashedPassword = await bcrypt.hash(tempUser.password, 10);
+
+		// Insert user in user
+		const { data: newUser, error: insertError } = await supabase
+			.from("users")
+			.insert([{ name: tempUser.name, rank: tempUser.rank, email_id, password: hashedPassword }])
+			.select()
+			.single();
+
+		if (insertError) {
+			return res.status(500).json({ message: "User creation failed." });
 		}
 
 		return res.status(200).json({ message: "User is now verified" });
 	}
 	catch (error) {
-		console.log("Error: ", error)
+		console.error("Verification: ", error)
 		res.status(500).json({ message: "An unexpected error occurred." });
 	}
 }
@@ -351,14 +361,14 @@ async function getVerifiedUsers(req, res) {
 			return res.status(500).json({ error: "Internal server error" });
 		}
 
-        if (!users || users.length === 0) {
-            return res.status(404).json({ success: false, message: "No verified users found." });
-        }
+		if (!users || users.length === 0) {
+			return res.status(404).json({ success: false, message: "No verified users found." });
+		}
 
-        return res.status(200).json({
-            success: true, 
-            verifiedUsers: users
-        });
+		return res.status(200).json({
+			success: true,
+			verifiedUsers: users
+		});
 	}
 	catch (error) {
 		console.log("Error: ", error)
@@ -372,6 +382,6 @@ export default {
 	login,
 	logoutUser,
 	editRole,
-	editIsVerified,
+	makeUserVerified,
 	getVerifiedUsers
 };

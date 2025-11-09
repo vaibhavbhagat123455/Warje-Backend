@@ -29,6 +29,7 @@ export async function verifyToken(req, res, next) {
             .single();
 
         if(userError) {
+            console.log("verify token error: ", userError)
             return res.status(500).json({ error: "Internal server error" });
         }
 
