@@ -92,77 +92,66 @@ async function createNewCase(req, res) {
         res.status(201).json({ message: "New case created and officers assigned successfully.", });
 
     } catch (error) {
-        console.log("New Case Error: ", error)
+        console.error("New Case Error: ", error)
         return res.status(500).json({ error: "Internal server error" });
     }
 }
 
 async function getTotalCaseCount(req, res) {
     try {
-        const officerId = req.params.id;
+        const officerId = req.params.user_id;
 
-        // Supabase Query to Count Cases
-        const { count, error } = await supabase
+        // query to count specific user case
+        const { data, count, error } = await supabase
             .from('case_users')
-            .select('*', { count: 'exact', head: true })
+            .select('case_id', { count: 'exact' })
             .eq('user_id', officerId);
 
+
         if (error) {
-            return res.status(500).json({
-                message: "Failed to fetch case count due to database error."
-            });
+            console.log(error)
+            return res.status(500).json({ message: "Internal server error" });
         }
 
         res.status(200).json({ total_cases_assigned: count });
-
-    } 
+    }
     catch (error) {
         console.error("Get total cases count error:", error);
-        res.status(500).json({ error: "Internal server error." });
+        res.status(500).json({ error: "Internal server error" });
     }
 }
 
-async function getVerifiedUserCasesCount(req, res) {
+async function getUserCasesCount(req, res) {
     try {
-        const { data: verifiedUsersWithCaseCount, error } = await supabase
-            .from("users")
-            .select(
-                `
-                name,
-                case_users(count)
-                `
-            )
-            .eq('is_verified', true)
-            .order('name', { ascending: true });
-
+        const { data, error } = await supabase
+            .from('users')
+            .select('name, case_users!inner(count)'); 
+        
         if (error) {
-            console.error("Supabase Error fetching verified users:", error);
-            return res.status(500).json({ success: false, message: "Database query failed." });
+            console.log(error)
+            return res.status(500).json({ error: "Internal server error" });
         }
 
-        if (!verifiedUsersWithCaseCount || verifiedUsersWithCaseCount.length === 0) {
-            return res.status(200).json({ success: true, data: [] });
-        }
-
-        const finalData = verifiedUsersWithCaseCount.map(user => ({
+        const cleanerData = data.map(user => ({
             name: user.name,
-            case_count: user.case_users[0]?.count || 0
+            count: user.case_users?.count || 0
         }));
 
-        return res.status(200).json({
-            success: true,
-            data: finalData
-        });
+        if (!data || data.length === 0) {
+            return res.status(200).json({ data: [] });
+        }
+        
+
+        return res.status(200).json({ data: cleanerData });
     }
     catch (error) {
-        console.error("Internal Server Error: ", error);
-        return res.status(500).json({ success: false, message: "An unexpected internal server error occurred." });
+        console.error("Get Users case count error: ", error);
+        return res.status(500).json({ error: "Internal server error" });
     }
 }
 
 export default {
     createNewCase,
     getTotalCaseCount,
-    getVerifiedUserCasesCount
-
+    getUserCasesCount
 }

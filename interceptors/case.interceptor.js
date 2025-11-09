@@ -67,14 +67,14 @@ async function validateNewCase(req, res, next) {
         next();
     }
     catch (error) {
-        console.log("New Case Validation Error: ", error)
+        console.error("New Case Validation Error: ", error)
         return res.status(500).json({ error: "Internal server error" });
     }
 }
 
 async function validateTotalCaseCount(req, res, next) {
     const currentUser = req.user;
-    const officerId = req.params.id;
+    const officerId = req.params.user_id;
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -84,7 +84,7 @@ async function validateTotalCaseCount(req, res, next) {
         });
     }
 
-    req.body.assigned_officer_id = officerId;
+    req.body.assigned_officer_id = officerId;    
 
     try {
         const { data: user, error: userError } = await supabase
@@ -94,60 +94,51 @@ async function validateTotalCaseCount(req, res, next) {
             .maybeSingle();
 
         if (userError) {
-            console.log("H");
             return res.status(500).json({ error: "Internal server error" });
         }
 
         // Admin or user not found
         if (!user) {
-            return res.status(401).json({ error: "Authenticated user not found in database." });
+            return res.status(401).json({ error: "Access Forbidden: Only Administrators can edit roles." });
         }
 
         next();
     }
     catch (error) {
-        console.log("Get total cases count validation error ", error)
+        console.error("Get total cases count validation error ", error)
         return res.status(500).json({ error: "Internal server error" });
     }
-
-    next();
 }
 
-async function validateotalCaseCount(req, res, next) {
+async function validateGetUserCasesCount(req, res, next) {
     const currentUser = req.user;
 
     try {
         const { data: user, error: userError } = await supabase
             .from("users")
-            .select("is_verified, role")
+            .select("role")
             .eq("user_id", currentUser.user_id)
-            .single();
+            .maybeSingle();
 
         if (userError) {
             return res.status(500).json({ error: "Internal server error" });
         }
 
-        if (!user) {
-            return res.status(400).json({ error: "No user found" });
-        }
-
         const ADMIN_ROLE = 2;
-        if (user.role !== ADMIN_ROLE || !user.is_verified) {
-            return res.status(403).json({
-                success: false,
-                message: "Access Forbidden: Only Administrators can edit roles."
-            });
+        if (!user || user.role !== ADMIN_ROLE) {
+            return res.status(401).json({ error: "Access Forbidden: Only Administrators can edit roles." });
         }
 
         next();
     }
     catch (error) {
-        console.log("Error: ", error);
+        console.error("Get Users case count validation error: ", error);
         return res.status(500).json({ error: "Internal server error" });
     }
 }
 
 export default {
     validateNewCase,
-    validateTotalCaseCount
+    validateTotalCaseCount,
+    validateGetUserCasesCount
 };
