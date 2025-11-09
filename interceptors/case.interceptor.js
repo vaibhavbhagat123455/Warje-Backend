@@ -10,12 +10,13 @@ async function validateNewCase(req, res, next) {
         title,
         priority,
         deadline,
+        section_under_ipc,
         assigned_officer_emails
     } = req.body;
 
-    if (!case_number || !title || !priority || !Array.isArray(assigned_officer_emails)) {
+    if (!case_number || !title || !priority || !Array.isArray(assigned_officer_emails) || !section_under_ipc) {
         return res.status(400).json({
-            message: "Case Number, Title, Priority, and the 'assigned_officer_emails' array are required fields."
+            message: "Case Number, Title, Priority, Sections, and the 'assigned_officer_emails' array are required fields."
         });
     }
 
@@ -47,28 +48,22 @@ async function validateNewCase(req, res, next) {
     try {
         const { data: user, error: userError } = await supabase
             .from("users")
-            .select("role, is_verified")
+            .select("role")
             .eq("user_id", currentUser.user_id)
-            .single();
+            .maybeSingle();
 
         if (userError) {
-            return res.status(500).json({ error: "Internal server error during user lookup" });
+            return res.status(500).json({ error: "Internal server error" });
         }
 
         if (!user) {
-            return res.status(401).json({ error: "Authenticated user not found in database." });
+            return res.status(401).json({ error: "Access Forbidden: Only Administrators can edit roles" });
         }
 
-        if (!user.is_verified) {
-            return res.status(403).json({
-                success: false,
-                message: "Access Forbidden: Only Administrators can edit roles."
-            });
-        }
         next();
     }
     catch (error) {
-        console.log("Error: ", error)
+        console.log("New Case Validation Error: ", error)
         return res.status(500).json({ error: "Internal server error" });
     }
 }

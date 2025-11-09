@@ -355,7 +355,7 @@ async function makeUserVerified(req, res) {
 		return res.status(200).json({ message: "User is now verified" });
 	}
 	catch (error) {
-		console.error("Verification: ", error)
+		console.error("Verification error: ", error)
 		res.status(500).json({ message: "An unexpected error occurred." });
 	}
 }
@@ -377,7 +377,7 @@ async function getVerifiedUsers(req, res) {
 		return res.status(200).json({ verifiedUsers: users });
 	}
 	catch (error) {
-		console.log("Error: ", error)
+		console.log("Verified users error: ", error)
 		res.status(500).json({ message: "An unexpected error occurred." });
 	}
 }

@@ -1,7 +1,6 @@
 import validator from "validator";
 import { supabase } from "../supabase.js";
 
-// SIGNUP INTERCEPTOR
 async function validateSignup(req, res, next) {
     const { name, email_id, password, rank, code } = req.body;
 
@@ -341,7 +340,7 @@ async function validateGetVerifiedUsers(req, res, next) {
         next();
     }
     catch (error) {
-        console.log("Error: ", error);
+        console.log("Verified Users validation error: ", error);
         return res.status(500).json({ error: "Internal server errro" });
     }
 }

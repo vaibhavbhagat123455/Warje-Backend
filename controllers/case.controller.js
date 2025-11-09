@@ -11,9 +11,9 @@ async function createNewCase(req, res) {
             assigned_officer_emails 
         } = req.body;
 
-        if (!case_number || !title || !priority || !Array.isArray(assigned_officer_emails)) {
+        if (!case_number || !title || !priority || !Array.isArray(assigned_officer_emails)|| !section_under_ipc) {
             return res.status(400).json({ 
-                message: "Missing required fields: case_number, title, priority, or assigned_officer_emails array." 
+                message: "Missing required fields: case_number, title, priority, Sections, or assigned_officer_emails array." 
             });
         }
         
@@ -25,11 +25,10 @@ async function createNewCase(req, res) {
             const { data: officers, error: lookupError } = await supabase
                 .from("users")
                 .select("user_id, email_id")
-                .in("email_id", cleanEmails)
-                .eq('is_verified', true); 
+                .in("email_id", cleanEmails); 
 
             if (lookupError) {
-                throw lookupError; 
+                return res.status(500).json({ error: "Internal server error" });
             }
 
             if (!officers || officers.length !== cleanEmails.length) {
@@ -85,15 +84,11 @@ async function createNewCase(req, res) {
             }
         }
         
-        res.status(201).json({
-            message: "New case created and officers assigned successfully.",
-        });
+        res.status(201).json({ message: "New case created and officers assigned successfully.",});
 
     } catch (error) {
-        console.error("Error creating new case:", error);
-        res.status(500).json({ 
-            message: "Failed to create new case. An internal server error occurred." 
-        });
+        console.log("New Case Error: ", error)
+        return res.status(500).json({ error: "Internal server error" });
     }
 }
 

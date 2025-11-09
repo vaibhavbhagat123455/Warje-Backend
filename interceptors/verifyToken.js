@@ -26,7 +26,7 @@ export async function verifyToken(req, res, next) {
             .from("users")
             .select("user_id")
             .eq("user_id", req.user.user_id)
-            .single();
+            .maybeSingle();
 
         if(userError) {
             console.log("verify token error: ", userError)
