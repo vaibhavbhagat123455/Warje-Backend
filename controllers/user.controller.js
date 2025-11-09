@@ -242,10 +242,14 @@ async function login(req, res) {
 			.from("users")
 			.select("password, name, rank")
 			.eq("email_id", email_id)
-			.single();
+			.maybeSingle();
 
 		if (error) {
 			return res.status(500).json({ message: "Internal server error" });
+		}
+
+		if(!user) {
+			return res.status(400).json({ error: "Email id is invalid" });
 		}
 
 		// Password matching
