@@ -320,28 +320,22 @@ async function validateGetVerifiedUsers(req, res, next) {
     try {
         const { data: user, error: userError } = await supabase
             .from("users")
-            .select("role, is_verified")
+            .select("role")
             .eq("user_id", currentUser.user_id)
-            .single();
+            .maybeSingle();
 
         if (userError) {
             return res.status(500).json({ error: "Internal server error during user lookup" });
         }
 
+        // SI or admin not found in db
         if (!user) {
-            return res.status(401).json({ error: "User not found in database." });
+            return res.status(401).json({ error: "Authenticated user not found" });
         }
 
         const ADMIN_ROLE = 2;
-        if (user.role !== ADMIN_ROLE || !user.is_verified) {
-            return res.status(403).json({
-                success: false,
-                message: "Access Forbidden: Only Administrators can edit roles."
-            });
-        }
-
-        if (!user.is_verified) {
-            return res.status(400).json({ error: "User is not verified" });
+        if (user.role !== ADMIN_ROLE ) {
+            return res.status(403).json({ message: "Access Forbidden: Only Administrators can edit roles."});
         }
 
         next();

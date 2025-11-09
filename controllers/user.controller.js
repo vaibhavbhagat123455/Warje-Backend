@@ -314,7 +314,6 @@ function logout(req, res) {
 	res.status(200).json({ message: 'Successfully logged out' });
 }
 
-
 async function makeUserVerified(req, res) {
 	const { email_id } = req.body;
 
@@ -365,8 +364,7 @@ async function getVerifiedUsers(req, res) {
 	try {
 		const { data: users, error: userError } = await supabase
 			.from("users")
-			.select("name, email_id")
-			.eq("is_verified", true);
+			.select("name, email_id");
 
 		if (userError) {
 			return res.status(500).json({ error: "Internal server error" });
@@ -376,10 +374,7 @@ async function getVerifiedUsers(req, res) {
 			return res.status(404).json({ success: false, message: "No verified users found." });
 		}
 
-		return res.status(200).json({
-			success: true,
-			verifiedUsers: users
-		});
+		return res.status(200).json({ verifiedUsers: users });
 	}
 	catch (error) {
 		console.log("Error: ", error)
