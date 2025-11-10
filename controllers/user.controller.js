@@ -298,7 +298,8 @@ async function login(req, res) {
 			token,
 			user: {
 				name: user.name,
-				rank: user.rank
+				rank: user.rank,
+				user_id: user.user_id
 			},
 		});
 	} catch (error) {
