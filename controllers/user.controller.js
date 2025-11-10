@@ -9,7 +9,7 @@ dotenv.config();
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000);
 
 const createToken = (user) => {
-	const { user_id, role, email_id } = user;
+	const { user_id, email_id } = user;
 
 	return jwt.sign(
 		{
@@ -274,7 +274,7 @@ async function login(req, res) {
 		// Find user in users table
 		const { data: user, error } = await supabase
 			.from("users")
-			.select("password, name, rank")
+			.select("password, name, rank, email_id, user_id")
 			.eq("email_id", email_id)
 			.maybeSingle();
 
