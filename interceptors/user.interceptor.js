@@ -256,7 +256,7 @@ async function validateMakeUserVerified(req, res, next) {
 
         // These means user is already verified
         if (userNotVerified) {
-            return res.status(409).json({ error: "User already is verified" });
+            return res.status(409).json({ error: "This account is already verified" });
         }
 
         // For admin, SI who has accepted to make these user verified
