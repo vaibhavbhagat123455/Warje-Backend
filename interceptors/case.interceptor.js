@@ -119,7 +119,6 @@ async function validateGetOfficersCasesCount(req, res, next) {
         if (userError) throw userError;
 
         if (!user || user.role !== ADMIN_ROLE_ID) {
-            console.log("hello");
             return res.status(403).json({ error: "Access Forbidden: Only Administrators can edit roles." });
         }
 
