@@ -14,7 +14,7 @@ async function validateSignup(req, res, next) {
         return res.status(400).json({ error: 'Invalid email format.' });
     }
 
-    if(password.length()< 8) {
+    if(password.length< 8) {
         return res.status(400).json({ error: "Password must contain 8 characters" });
     }
 
