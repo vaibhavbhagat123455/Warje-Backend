@@ -281,7 +281,7 @@ async function login(req, res) {
 		if (error) throw error;
 
 		if (!user) {
-			return res.status(401).json({ error: "Email id is invalid" });
+			return res.status(404).json({ error: "User not found" });
 		}
 
 		// Password matching
