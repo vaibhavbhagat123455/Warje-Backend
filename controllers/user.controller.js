@@ -274,7 +274,7 @@ async function login(req, res) {
 		// Find user in users table
 		const { data: user, error } = await supabase
 			.from("users")
-			.select("password, name, rank, email_id, user_id")
+			.select("password, name, rank, email_id, user_id, role")
 			.eq("email_id", email_id)
 			.maybeSingle();
 
@@ -299,7 +299,8 @@ async function login(req, res) {
 			user: {
 				name: user.name,
 				rank: user.rank,
-				user_id: user.user_id
+				user_id: user.user_id,
+				role: user.role
 			},
 		});
 	} catch (error) {

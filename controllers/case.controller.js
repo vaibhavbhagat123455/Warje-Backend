@@ -103,7 +103,7 @@ async function getTotalCaseCount(req, res) {
         // query to count specific user case
         const { count, error } = await supabase
             .from('case_users')
-            .select('user_id', { count: 'exact', head: true }) 
+            .select('user_id', { count: 'exact', head: true })
             .eq('user_id', officerId);
 
 
@@ -127,7 +127,7 @@ async function getOfficersCaseCount(req, res) {
 
         const cleanerData = data.map(user => ({
             name: user.name,
-            count: user.case_users?.[0]?.count || 0 
+            count: user.case_users?.[0]?.count || 0
         }));
 
         return res.status(200).json({ data: cleanerData });
@@ -138,8 +138,40 @@ async function getOfficersCaseCount(req, res) {
     }
 }
 
+async function getActiveCaseCount(req, res) {
+    const officerId = req.params.user_id;
+
+    if (!officerId) {
+        return res.status(400).json({ error: "Missing user_id parameter" });
+    }
+    try {
+        const { data, count, error } = await supabase
+            .from('case_users')
+            .select(
+                            `
+                case_id,
+                cases!inner (
+                status
+                )
+                `,
+                { count: 'exact' }
+            )
+            .eq('user_id', officerId) 
+            .eq('cases.status', 'Pending');
+
+        if (error) return error;
+
+        return res.status(200).json({ ActiveCaseCount: count || 0 });
+    }
+    catch (error) {
+        console.log("Validate get Active: ", error);
+        return res.status(500).json({ error: "Internal server error during data processing" })
+    }
+}
+
 export default {
     createNewCase,
     getTotalCaseCount,
-    getOfficersCaseCount
+    getOfficersCaseCount,
+    getActiveCaseCount
 }

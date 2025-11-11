@@ -81,10 +81,7 @@ async function validateTotalCaseCount(req, res, next) {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
     if (!officerId || !uuidRegex.test(officerId)) {
-        return res.status(400).json({
-            error: "Bad Request",
-            message: "Invalid officer ID format. Must be a valid UUID."
-        });
+        return res.status(400).json({ error: "Invalid officer ID format. Must be a valid UUID." });
     }
 
     try {
@@ -133,8 +130,21 @@ async function validateGetOfficersCasesCount(req, res, next) {
     }
 }
 
+async function validategetActiveCaseCount(req, res, next) {
+    const officerId = req.params.user_id;
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (!officerId || !uuidRegex.test(officerId)) {
+        return res.status(400).json({ error: "Invalid officer ID format. Must be a valid UUID" });
+    }
+
+    next();
+}
+
 export default {
     validateNewCase,
     validateTotalCaseCount,
-    validateGetOfficersCasesCount
+    validateGetOfficersCasesCount,
+    validategetActiveCaseCount
 };
