@@ -14,5 +14,6 @@ router.post("/createcase", caseIntercetor.validateNewCase, caseController.create
 router.post("/getTotalCaseCount/:user_id", caseIntercetor.validateTotalCaseCount, caseController.getTotalCaseCount) // done
 router.post("/getUsersCaseCount", caseIntercetor.validateGetOfficersCasesCount, caseController.getOfficersCaseCount); // done
 router.post("/getActiveCaseCount/:user_id", caseIntercetor.validategetActiveCaseCount, caseController.getActiveCaseCount);
+router.post("/getCompletedCaseCount/:user_id", caseIntercetor.validategetCompletedCaseCount, caseController.getCompletedCaseCount);
 
 export default router

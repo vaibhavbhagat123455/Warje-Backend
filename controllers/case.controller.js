@@ -159,12 +159,43 @@ async function getActiveCaseCount(req, res) {
             .eq('user_id', officerId) 
             .eq('cases.status', 'Pending');
 
-        if (error) return error;
+        if (error) return error; 
 
         return res.status(200).json({ ActiveCaseCount: count || 0 });
     }
     catch (error) {
-        console.log("Validate get Active: ", error);
+        console.log("Get Active error: ", error);
+        return res.status(500).json({ error: "Internal server error during data processing" })
+    }
+}
+
+async function getCompletedCaseCount(req, res) {
+    const officerId = req.params.user_id;
+
+    if (!officerId) {
+        return res.status(400).json({ error: "Missing user_id parameter" });
+    }
+    try {
+        const { data, count, error } = await supabase
+            .from('case_users')
+            .select(
+                            `
+                case_id,
+                cases!inner (
+                status
+                )
+                `,
+                { count: 'exact' }
+            )
+            .eq('user_id', officerId) 
+            .eq('cases.status', 'Completed');
+
+        if (error) return error; 
+
+        return res.status(200).json({ CompletedCaseCount: count || 0 });
+    }
+    catch (error) {
+        console.log("Get Completed error: ", error);
         return res.status(500).json({ error: "Internal server error during data processing" })
     }
 }
@@ -173,5 +204,6 @@ export default {
     createNewCase,
     getTotalCaseCount,
     getOfficersCaseCount,
-    getActiveCaseCount
+    getActiveCaseCount,
+    getCompletedCaseCount
 }
