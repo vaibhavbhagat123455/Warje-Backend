@@ -148,7 +148,7 @@ async function getActiveCaseCount(req, res) {
         const { data, count, error } = await supabase
             .from('case_users')
             .select(
-                            `
+                `
                 case_id,
                 cases!inner (
                 status
@@ -156,10 +156,10 @@ async function getActiveCaseCount(req, res) {
                 `,
                 { count: 'exact' }
             )
-            .eq('user_id', officerId) 
+            .eq('user_id', officerId)
             .eq('cases.status', 'Pending');
 
-        if (error) return error; 
+        if (error) return error;
 
         return res.status(200).json({ ActiveCaseCount: count || 0 });
     }
@@ -179,7 +179,7 @@ async function getCompletedCaseCount(req, res) {
         const { data, count, error } = await supabase
             .from('case_users')
             .select(
-                            `
+                `
                 case_id,
                 cases!inner (
                 status
@@ -187,10 +187,10 @@ async function getCompletedCaseCount(req, res) {
                 `,
                 { count: 'exact' }
             )
-            .eq('user_id', officerId) 
+            .eq('user_id', officerId)
             .eq('cases.status', 'Completed');
 
-        if (error) return error; 
+        if (error) return error;
 
         return res.status(200).json({ CompletedCaseCount: count || 0 });
     }
@@ -200,10 +200,111 @@ async function getCompletedCaseCount(req, res) {
     }
 }
 
+function formatDate(dateString) {
+    if (!dateString) return null;
+
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0'); // +1 because months are 0-indexed
+    const day = date.getDate().toString().padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+}
+
+async function getCaseById(req, res) {
+    const officerId = req.params.user_id;
+
+    // 1. Validate input
+    if (!officerId) {
+        return res.status(400).json({ error: "Missing user_id parameter" });
+    }
+
+    try {
+        // 2. Define the Supabase query
+        const selectString = "cases(case_number, title, status, priority, created_at, deadline, section_under_ipc)";
+
+        // 3. Fetch data from Supabase
+        const { data, error } = await supabase
+            .from('case_users')
+            .select(selectString)
+            .eq('user_id', officerId);
+
+        if (error) throw error;
+
+        if (data) {
+            const processedData = data.map(item => {
+                if (item.cases) {
+                    item.cases.created_at_yyyymmdd = formatDate(item.cases.created_at);
+                }
+                return item;
+            });
+
+            return res.status(200).json({ caseInfo: processedData }); _
+        }
+
+    }
+    catch (error) {
+        console.error("Get case error: ", error);
+        return res.status(500).json({ error: "Internal server error during data processing." });
+    }
+}
+
+async function getCaseByEmailId(req, res) {
+    const { email_id } = req.body
+
+    if (!email_id) {
+        return res.status(400).json({ error: "Missing Email Id" });
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('case_users')
+            .select(`
+                    cases(
+                    case_id, 
+                    title, 
+                    status, 
+                    deadline, 
+                    priority, 
+                    created_at, 
+                    case_number, 
+                    section_under_ipc
+                    ),             
+                    users!inner(email_id) 
+                `)
+            .eq('users.email_id', email_id);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+            
+            const caseList = data.map(item => item.cases);
+
+            const processedCaseList = caseList.map(caseItem => {
+                if (caseItem) {
+                    caseItem.created_at_yyyymmdd = formatDate(caseItem.created_at);
+                }
+                return caseItem;
+            });
+
+            return res.status(200).json({ caseInfo: processedCaseList });
+
+        } else {
+            return res.status(200).json({ caseInfo: [] });
+        }
+
+    }
+    catch (error) {
+        console.error("Get case error: ", error);
+        return res.status(500).json({ error: "Internal server error during data processing." });
+    }
+}
 export default {
     createNewCase,
     getTotalCaseCount,
     getOfficersCaseCount,
     getActiveCaseCount,
-    getCompletedCaseCount
+    getCompletedCaseCount,
+    getCaseById,
+    getCaseByEmailId
 }

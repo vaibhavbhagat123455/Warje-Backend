@@ -9,11 +9,13 @@ const router = express.Router()
 router.use(verifyToken);
 router.use(checkTokenRefresh);
 
-router.post("/createcase", caseIntercetor.validateNewCase, caseController.createNewCase) // done
+router.post("/createcase", caseIntercetor.validateNewCase, caseController.createNewCase) 
 // specific user
-router.post("/getTotalCaseCount/:user_id", caseIntercetor.validateTotalCaseCount, caseController.getTotalCaseCount) // done
-router.post("/getUsersCaseCount", caseIntercetor.validateGetOfficersCasesCount, caseController.getOfficersCaseCount); // done
+router.post("/getTotalCaseCount/:user_id", caseIntercetor.validateTotalCaseCount, caseController.getTotalCaseCount) 
+router.post("/getUsersCaseCount", caseIntercetor.validateGetOfficersCasesCount, caseController.getOfficersCaseCount);
 router.post("/getActiveCaseCount/:user_id", caseIntercetor.validategetActiveCaseCount, caseController.getActiveCaseCount);
 router.post("/getCompletedCaseCount/:user_id", caseIntercetor.validategetCompletedCaseCount, caseController.getCompletedCaseCount);
+router.post("/getCaseById/:user_id", caseIntercetor.validateGetCaseId, caseController.getCaseById);
+router.post("/getCaseByEmailId", caseIntercetor.validateGetCaseEmailId, caseController.getCaseByEmailId);
 
 export default router

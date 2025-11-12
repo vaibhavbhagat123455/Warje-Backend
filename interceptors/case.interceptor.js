@@ -154,10 +154,61 @@ async function validategetCompletedCaseCount(req, res, next) {
     next();
 }
 
+async function validateGetCaseId(req, res, next) {
+    const officerId = req.params.user_id;
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (!officerId || !uuidRegex.test(officerId)) {
+        return res.status(400).json({ error: "Invalid officer ID format. Must be a valid UUID" });
+    }
+
+    next();
+}
+
+async function validateGetCaseEmailId(req, res, next) {
+    const currentUser = req.user;
+    const { email_id } = req.body;
+
+    if (!email_id) {
+        return res.status(400).json({ error: "Missing Email Id" });
+    }
+
+    if (!validator.isEmail(email_id)) {
+        return res.status(400).json({ error: 'Invalid email format.' });
+    }
+
+    try {
+        const { data: user, error: userError } = await supabase
+            .from("users")
+            .select("role")
+            .eq("user_id", currentUser.user_id)
+            .maybeSingle();
+
+        if (userError) throw existingUserError;
+
+        if(!user) {
+            return res.status(404).json({ error: "No user found" });
+        }
+
+        if(user.role !== ADMIN_ROLE_ID) {
+            return res.status(400).json({ error: "Access Forbidden: Only Administrators can edit roles." })
+        }
+
+        next();
+    }
+    catch(error) {
+        console.error("Validate case Email Id Error: ", error);
+        return res.status(500).json({ error: "Internal server error during data processing" })
+    }
+}
+
 export default {
     validateNewCase,
     validateTotalCaseCount,
     validateGetOfficersCasesCount,
     validategetActiveCaseCount,
-    validategetCompletedCaseCount
+    validategetCompletedCaseCount,
+    validateGetCaseId,
+    validateGetCaseEmailId
 };

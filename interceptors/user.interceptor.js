@@ -279,7 +279,7 @@ async function validateMakeUserVerified(req, res, next) {
 
         // admin should have that role
         if (existingUser.role !== ADMIN_ROLE) {
-            return res.status(403).json({ message: "Access Forbidden: Only Administrators can edit roles."});
+            return res.status(403).json({ error: "Access Forbidden: Only Administrators can edit roles."});
         }
 
         // To check if the user is in temp_users or not
