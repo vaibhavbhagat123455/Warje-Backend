@@ -299,6 +299,65 @@ async function getCaseByEmailId(req, res) {
         return res.status(500).json({ error: "Internal server error during data processing." });
     }
 }
+
+async function updateCase(req, res) {
+    try {
+        // Retrieve sanitized data from the interceptor
+        const case_id = req.validCaseId;
+        const updates = req.validCaseUpdates;
+
+        const { data: updatedCase, error } = await supabase
+            .from("cases")
+            .update(updates)
+            .eq("case_id", case_id)
+            .select("case_number, title, status, priority, deadline, section_under_ipc") 
+            .single();
+
+        if (error) throw error;
+
+        // 2. Handle Not Found
+        if (!updatedCase) {
+            return res.status(404).json({ error: "Case not found." });
+        }
+
+        // 3. Success
+        res.status(200).json({ 
+            message: "Case updated successfully", 
+            case: updatedCase 
+        });
+
+    } catch (error) {
+        console.error("Update Case Error:", error);
+        res.status(500).json({ error: "Internal server error during case update." });
+    }
+}
+
+async function deleteCase(req, res) {
+    try {
+        const case_id = req.validCaseId; 
+
+        // 1. Perform Delete
+        const { error } = await supabase
+            .from("cases")
+            .delete()
+            .eq("case_id", case_id);
+
+        if (error) throw error;
+
+        // 2. Success Response
+        res.status(200).json({ message: "Case deleted successfully" });
+
+    } catch (error) {
+        console.error("Delete Case Error:", error);
+        if (error.code === '23503') {
+            return res.status(409).json({ 
+                error: "Cannot delete case because it has related records (evidence, officers). Please clear them first." 
+            });
+        }
+        res.status(500).json({ error: "Internal server error during case deletion." });
+    }
+}
+
 export default {
     createNewCase,
     getTotalCaseCount,
@@ -306,5 +365,7 @@ export default {
     getActiveCaseCount,
     getCompletedCaseCount,
     getCaseById,
-    getCaseByEmailId
+    getCaseByEmailId,
+    updateCase,
+    deleteCase
 }

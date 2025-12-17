@@ -35,7 +35,7 @@ export default async function handler(req, res) {
                  message = `Case ${item.case_number} is due for a Day ${item.due_day} check.`;
             }
 
-            // =========================================================
+            //  =========================================================
             // **TODO: INTEGRATE YOUR ACTUAL NOTIFICATION SENDER HERE**
             // You would call your email, push, or SMS service here.
             // Example: 

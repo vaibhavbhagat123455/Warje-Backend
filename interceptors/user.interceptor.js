@@ -243,7 +243,7 @@ async function validateMakeUserVerified(req, res, next) {
     const ADMIN_ROLE = 2;
 
     if (!email_id) {
-        return res.status(400).json({ error: "Email id and verification is required" });
+        return res.status(400).json({ error: "Email id is required" });
     }
 
     try {
@@ -347,7 +347,7 @@ async function validateGetUnverifiedUsers(req, res, next) {
         // user is not admin
         const ADMIN_ROLE = 2;
         if (user.role !== ADMIN_ROLE ) {
-            return res.status(403).json({ message: "Access Forbidden: Only Administrators can edit roles."});
+            return res.status(403).json({ message: "Access Forbidden: Only Administrators can get details."});
         }
 
         next();
@@ -358,6 +358,101 @@ async function validateGetUnverifiedUsers(req, res, next) {
     }
 }
 
+const validateUserUpdate = async (req, res, next) => {
+    const currentUser = req.user; // Contains { user_id, email_id } from your JWT
+    const { name, rank, email_id, password } = req.body;
+
+    const updates = {};
+    if (name) updates.name = name;
+    if (rank) updates.rank = rank;
+    if (password) updates.password = password;
+
+    // --- LOGIC FIX START ---
+    // Only process email if it is provided AND it is DIFFERENT from the current one
+    if (email_id && email_id !== currentUser.email_id) {
+        
+        // 1. Check if this NEW email is taken by someone else
+        const { data: existingUser } = await supabase
+            .from("users")
+            .select("user_id")
+            .eq("email_id", email_id)
+            .neq("user_id", currentUser.user_id) // Safety check
+            .maybeSingle();
+
+        if (existingUser) {
+            return res.status(409).json({ error: "Email ID is already in use." });
+        }
+
+        // 2. If valid, add it to the updates object
+        updates.email_id = email_id;
+    }
+    // --- LOGIC FIX END ---
+
+    if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "No fields to update (or data matches current)." });
+    }
+
+    try {
+        const targetUserId = currentUser.user_id;
+
+        // Verify the user exists (Standard check)
+        const { data: user, error: userError } = await supabase
+            .from("users")
+            .select("user_id")
+            .eq("user_id", targetUserId)
+            .maybeSingle();
+
+        if (userError) throw userError;
+        if (!user) return res.status(404).json({ error: "User account not found." });
+
+        req.validUpdates = updates;
+        req.targetUserId = targetUserId;
+        next();
+
+    } catch (error) {
+        console.log("Validate User Error: ", error);
+        return res.status(500).json({ error: "Internal server error." });
+    }
+};
+
+const validateUserDeletion = async(req, res, next) => {
+    // const currentUser = req.user;
+    const { user_id } = req.body;
+
+    // if(currentUser.user_id !== user_id) {
+    //     return res.status(404).json({ error: "Invalid user id" });
+    // }
+
+    // 1. Check if User ID exists
+    if (!user_id) {
+        return res.status(400).json({ error: "User ID is required for update." });
+    }
+
+    try {
+        const { data: user, error: userError } = await supabase
+            .from("users")
+            .select("user_id")
+            .eq("user_id", user_id)
+            .maybeSingle();
+
+        if (userError) throw userError;
+
+        // user not found in db
+        if (!user) {
+            return res.status(404).json({ error: "User account not found." });
+        }
+
+        // 4. Pass the validated ID to the controller
+        req.validUserId = user_id; 
+        next();
+    }
+    catch (error) {
+        console.log("Validate Users deletion error: ", error);
+        return res.status(500).json({ error: "Internal server error during data processing" });
+    }
+    
+};
+
 export default {
     validateSignup,
     validateLogin,
@@ -365,5 +460,7 @@ export default {
     validateRole,
     validateMakeUserVerified,
     validateGetUsers,
-    validateGetUnverifiedUsers
+    validateGetUnverifiedUsers,
+    validateUserUpdate,
+    validateUserDeletion
 }

@@ -203,6 +203,85 @@ async function validateGetCaseEmailId(req, res, next) {
     }
 }
 
+const validateCaseUpdate = async(req, res, next) => {
+    const { case_number, title, status, priority, deadline, section_under_ipc } = req.body;
+
+    if (!case_number) {
+        return res.status(400).json({ error: "Case number is required for update." });
+    }
+
+    // 2. Sanitization: Build the updates object with ONLY allowed fields
+    const updates = {};
+    if (title) updates.title = title;
+    if (status) updates.status = status;
+    if (priority) updates.priority = priority;
+    if (deadline) updates.deadline = deadline;
+    if (section_under_ipc) updates.section_under_ipc = section_under_ipc;
+
+    // 3. Validation: Ensure there is actually something to update
+    if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "No fields provided for update." });
+    }
+
+    try {
+        const { data: cases, error: caseError } = await supabase
+            .from("cases")
+            .select("case_id")
+            .eq("case_number", case_number)
+            .maybeSingle();
+
+        if (caseError) throw caseError;
+
+        // case not found in db
+        if (!cases) {
+            return res.status(404).json({ error: "Cases not found." });
+        }
+
+        // 4. Attach validated data to the request object
+        req.validCaseId = cases.case_id;
+        req.validCaseUpdates = updates;
+
+        next();
+    }
+    catch(error) {
+        console.error("Validate case update Error: ", error);
+        return res.status(500).json({ error: "Internal server error during data processing" })
+    }
+};
+
+const validateCaseDeletion = async(req, res, next) => {
+    const { case_number } = req.body;
+
+    // 1. Validation: Ensure ID is provided
+    if (!case_number) {
+        return res.status(400).json({ error: "Case ID is required for deletion." });
+    }
+
+    try {
+        const { data: cases, error: caseError } = await supabase
+        .from("cases")
+        .select("case_id")
+        .eq("case_number", case_number)
+        .maybeSingle();
+
+        
+        if (caseError) throw caseError;
+        
+        // user not found in db
+        if (!cases) {
+            return res.status(404).json({ error: "Cases not found." });
+        }
+        
+        // 2. Attach validated ID to request
+        req.validCaseId = cases.case_id;
+        next();
+    }
+    catch(error) {
+        console.error("Validate case deletion Error: ", error);
+        return res.status(500).json({ error: "Internal server error during data processing" })
+    }
+};
+
 export default {
     validateNewCase,
     validateTotalCaseCount,
@@ -210,5 +289,7 @@ export default {
     validategetActiveCaseCount,
     validategetCompletedCaseCount,
     validateGetCaseId,
-    validateGetCaseEmailId
+    validateGetCaseEmailId,
+    validateCaseUpdate,
+    validateCaseDeletion
 };

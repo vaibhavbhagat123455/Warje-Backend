@@ -17,5 +17,7 @@ router.post("/getActiveCaseCount/:user_id", caseIntercetor.validategetActiveCase
 router.post("/getCompletedCaseCount/:user_id", caseIntercetor.validategetCompletedCaseCount, caseController.getCompletedCaseCount);
 router.post("/getCaseById/:user_id", caseIntercetor.validateGetCaseId, caseController.getCaseById);
 router.post("/getCaseByEmailId", caseIntercetor.validateGetCaseEmailId, caseController.getCaseByEmailId);
+router.post("/updateCase", caseIntercetor.validateCaseUpdate, caseController.updateCase);
+router.post("/deleteCase", caseIntercetor.validateCaseDeletion, caseController.deleteCase)
 
 export default router

@@ -354,7 +354,7 @@ async function makeUserVerified(req, res) {
 	const { email_id } = req.body;
 
 	if (!email_id) {
-		return res.status(400).json({ error: "Email id and verification is required" });
+		return res.status(400).json({ error: "Email id is required" });
 	}
 
 	try {
@@ -437,6 +437,56 @@ async function getUnverifiedUser(req, res) {
 	}
 }
 
+async function updateUser(req, res) {
+    try {
+        const user_id = req.targetUserId; 
+        
+        const updates = req.validUpdates;
+
+        if (updates.password) {
+            updates.password = await bcrypt.hash(updates.password, 10);
+        }
+
+        // 2. Perform the update
+        const { data: updatedUser, error } = await supabase
+            .from("users")
+            .update(updates)       // Only updates name, rank, etc.
+            .eq("user_id", user_id) // Finds the correct row
+            .select("name, rank, email_id, role") 
+            .single();
+
+        if (error) throw error;
+
+        res.status(200).json({ 
+            message: "User updated successfully", 
+            user: updatedUser 
+        });
+
+    } catch (error) {
+        console.error("Update User Error:", error);
+        res.status(500).json({ error: "Internal server error." });
+    }
+}
+
+async function deleteUser(req, res) {
+    try {
+        const user_id = req.validUserId;
+
+        const { error } = await supabase
+            .from("users")
+            .delete()
+            .eq("user_id", user_id);
+
+        if (error) throw error;
+
+        res.status(200).json({ message: "User deleted successfully" });
+
+    } catch (error) {
+        console.error("Delete User Error:", error);
+        res.status(500).json({ error: "Internal server error during user deletion." });
+    }
+}
+
 export default {
 	sendOTP,
 	signup,
@@ -445,5 +495,7 @@ export default {
 	editRole,
 	makeUserVerified,
 	getUsers,
-	getUnverifiedUser
+	getUnverifiedUser,
+	updateUser,
+	deleteUser
 };
