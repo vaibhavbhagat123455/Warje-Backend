@@ -1,19 +1,13 @@
-import jwt from "jsonwebtoken"
-import nodemailer from "nodemailer"
-import bcrypt from "bcrypt"
-import dotenv from "dotenv"
-import { supabase } from "../supabase.js"
-
-import userService from "../services/user.service.js"
+import authService from "../services/auth.service.js"
 
 import { STATUS } from "../utils/constants.js"
-import { successResponseBody, errorResponseBody } from "../utils/responseBody.js"
+import { successResponseBody } from "../utils/responseBody.js"
 
 const signup = async(req, res) => {
     try {
         const data = req.body;
         
-        const result = await userService.signupUser(data);
+        const result = await authService.signupUser(data);
 
         successResponseBody.data = result;
         successResponseBody.message = "User registered successfully.";
@@ -37,7 +31,7 @@ const signin = async(req, res) => {
     try {
         const data = req.body;
         
-        const result = await userService.signinUser(data);
+        const result = await authService.signinUser(data);
 
         successResponseBody.data = result;
         successResponseBody.message = "User sign in successfully.";

@@ -1,10 +1,6 @@
-import jwt from "jsonwebtoken"
 import nodemailer from "nodemailer"
-import bcrypt from "bcrypt"
 import dotenv from "dotenv"
 import { supabase } from "../supabase.js"
-
-import userService from "../services/user.service.js"
 
 import { STATUS, OTP_PURPOSE } from "../utils/constants.js"
 import { successResponseBody, errorResponseBody } from "../utils/responseBody.js"
@@ -21,7 +17,6 @@ const transporter = nodemailer.createTransport({
 	},
 });
 
-// Send OTP
 async function sendOTP(req, res) {
     try {
         const { email_id, purpose, name } = req.body;
