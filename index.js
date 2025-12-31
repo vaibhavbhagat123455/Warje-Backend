@@ -1,11 +1,19 @@
 import express from "express";
 import apiRoutes from "./routes/index.js";
 import dotenv from "dotenv";
+import cors from "cors";
+
 import { apiKeyGuard } from "./apiKeyGuard.js";
 
 dotenv.config();
 
 const app = express();
+
+app.use(cors({
+    origin: "*", 
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    credentials: true
+}));
 
 app.use(express.json());
 
