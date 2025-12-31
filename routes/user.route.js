@@ -6,10 +6,7 @@ import { checkTokenRefresh } from "../interceptors/checkTokenRefresh.js"
 
 const router = express.Router()
 
-router.post("/logout", userController.logout) 
 router.post("/sendOtp", userIntercetor.validateOtpReq, userController.sendOTP) 
-router.post("/signup", userIntercetor.validateSignup, userController.signup)
-router.post("/login", userIntercetor.validateLogin, userController.login) 
 
 router.use(verifyToken);
 router.use(checkTokenRefresh);

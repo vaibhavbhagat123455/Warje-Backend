@@ -237,7 +237,7 @@ async function validateRole(req, res, next) {
 }
 
 async function validateMakeUserVerified(req, res, next) {
-    const currentUser = req.user;
+    // const currentUser = req.user;
     const { email_id } = req.body;
 
     const ADMIN_ROLE = 2;
@@ -248,53 +248,53 @@ async function validateMakeUserVerified(req, res, next) {
 
     try {
         // For existing user who is not verified and checking is verification in users (Is he already verified)
-        const { data: userNotVerified, error: userNotVerifiedError } = await supabase
-            .from("users")
-            .select("email_id")
-            .eq("email_id", email_id)
-            .maybeSingle();
+        // const { data: userNotVerified, error: userNotVerifiedError } = await supabase
+        //     .from("users")
+        //     .select("email_id")
+        //     .eq("email_id", email_id)
+        //     .maybeSingle();
 
-        if (userNotVerifiedError) {
-            return res.status(500).json({ error: "Internal server error during data processing" });
-        }
+        // if (userNotVerifiedError) {
+        //     return res.status(500).json({ error: "Internal server error during data processing" });
+        // }
 
-        // These means user is already verified
-        if (userNotVerified) {
-            return res.status(409).json({ error: "This account is already verified" });
-        }
+        // // These means user is already verified
+        // if (userNotVerified) {
+        //     return res.status(409).json({ error: "This account is already verified" });
+        // }
 
-        // For admin, SI who has accepted to make these user verified
-        const { data: existingUser, error: existingUserError } = await supabase
-            .from("users")
-            .select("role")
-            .eq("user_id", currentUser.user_id)
-            .maybeSingle();
+        // // For admin, SI who has accepted to make these user verified
+        // const { data: existingUser, error: existingUserError } = await supabase
+        //     .from("users")
+        //     .select("role")
+        //     .eq("user_id", currentUser.user_id)
+        //     .maybeSingle();
             
-        if (existingUserError) throw existingUserError;
+        // if (existingUserError) throw existingUserError;
 
-        // Admin or SI not found in db
-        if (!existingUser) {
-            return res.status(404).json({ error: "Authenticated user not found in database." });
-        }
+        // // Admin or SI not found in db
+        // if (!existingUser) {
+        //     return res.status(404).json({ error: "Authenticated user not found in database." });
+        // }
 
-        // admin should have that role
-        if (existingUser.role !== ADMIN_ROLE) {
-            return res.status(403).json({ error: "Access Forbidden: Only Administrators can edit roles."});
-        }
+        // // admin should have that role
+        // if (existingUser.role !== ADMIN_ROLE) {
+        //     return res.status(403).json({ error: "Access Forbidden: Only Administrators can edit roles."});
+        // }
 
-        // To check if the user is in temp_users or not
-        const { data: tempUser, error: tempUserError } = await supabase
-            .from("temp_users")
-            .select("email_id")
-            .eq("email_id", email_id)
-            .maybeSingle();
+        // // To check if the user is in temp_users or not
+        // const { data: tempUser, error: tempUserError } = await supabase
+        //     .from("temp_users")
+        //     .select("email_id")
+        //     .eq("email_id", email_id)
+        //     .maybeSingle();
 
-        if (tempUserError) throw tempUserError;
+        // if (tempUserError) throw tempUserError;
 
-        // Target user is not found in temp_users db
-        if (!tempUser) {
-            return res.status(404).json({ error: "Target user not found" });
-        }
+        // // Target user is not found in temp_users db
+        // if (!tempUser) {
+        //     return res.status(404).json({ error: "Target user not found" });
+        // }
 
         next();
     }
