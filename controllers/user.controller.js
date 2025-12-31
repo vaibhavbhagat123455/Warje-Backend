@@ -4,6 +4,7 @@ import { supabase } from "../supabase.js"
 
 import { STATUS, OTP_PURPOSE } from "../utils/constants.js"
 import { successResponseBody, errorResponseBody } from "../utils/responseBody.js"
+import userService from "../services/user.service.js"
 
 dotenv.config();
 
@@ -291,34 +292,29 @@ async function getUnverifiedUser(req, res) {
 	}
 }
 
-async function updateUser(req, res) {
-    try {
-        const user_id = req.targetUserId; 
-        
-        const updates = req.validUpdates;
+const updateUser = async(req, res) => {
+    try {        
+        const data = req.body;
+        const user_id = req.params.id;
 
-        if (updates.password) {
-            updates.password = await bcrypt.hash(updates.password, 10);
-        }
+        const result = await userService.updateUserService(data, user_id);
 
-        // 2. Perform the update
-        const { data: updatedUser, error } = await supabase
-            .from("users")
-            .update(updates)       // Only updates name, rank, etc.
-            .eq("user_id", user_id) // Finds the correct row
-            .select("name, rank, email_id, role") 
-            .single();
+        successResponseBody.data = result;
+        successResponseBody.message = "User updated successfully.";
 
-        if (error) throw error;
-
-        res.status(200).json({ 
-            message: "User updated successfully", 
-            user: updatedUser 
-        });
+        return res.status(STATUS.OK).json(successResponseBody);
 
     } catch (error) {
-        console.error("Update User Error:", error);
-        res.status(500).json({ error: "Internal server error." });
+        console.error("Update user Controller Error:", error);
+
+        if(error.code) {
+           return res.status(error.code).json(error);
+        }
+
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json({
+            message: "Something went wrong.",
+            success: false
+        });
     }
 }
 

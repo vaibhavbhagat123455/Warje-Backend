@@ -36,16 +36,23 @@ const checkUserNotExists = async (req, res, next) => {
     }
 };
 
-const validateName = (req, res, next) => {
+export const validateName = (req, res, next) => {
     if (!req.body.name) {
         return res.status(STATUS.BAD_REQUEST).json(
             createErrorResponse("name", "Name of the user not present in the request")
         );
     }
+
+    if (req.body.name.length < 2 || req.body.name.length > 20) {
+         return res.status(STATUS.BAD_REQUEST).json(
+            createErrorResponse("name", "Name must be between 2 and 20 characters")
+        );
+    }
+
     next();
 };
 
-const validateEmail = (req, res, next) => {
+export const validateEmail = (req, res, next) => {
     if (!req.body.email_id) {
         return res.status(STATUS.BAD_REQUEST).json(
             createErrorResponse("email_id", "Email of the user not present in the request")
@@ -60,7 +67,7 @@ const validateEmail = (req, res, next) => {
     next();
 };
 
-const validatePassword = (req, res, next) => {
+export const validatePassword = (req, res, next) => {
     if (!req.body.password) {
         return res.status(STATUS.BAD_REQUEST).json(
             createErrorResponse("password", "Password is required")
@@ -90,7 +97,7 @@ const validateCode = (req, res, next) => {
     next();
 };
 
-const validateRank = (req, res, next) => {
+export const validateRank = (req, res, next) => {
     if (!req.body.rank) {
         return res.status(STATUS.BAD_REQUEST).json(
             createErrorResponse("rank", "Rank is required")
@@ -105,7 +112,26 @@ const validateRank = (req, res, next) => {
     next();
 };
 
+export const validateStrictBody = (allowedKeys) => {
+    return (req, res, next) => {
+        const receivedKeys = Object.keys(req.body);
+        
+        const extraKeys = receivedKeys.filter(key => !allowedKeys.includes(key));
+
+        if (extraKeys.length > 0) {
+            return res.status(STATUS.BAD_REQUEST).json(
+                createErrorResponse(
+                    "unexpected_fields", 
+                    `Invalid Request. Unknown fields present: ${extraKeys.join(", ")}`
+                )
+            );
+        }
+        next();
+    };
+};
+
 const validateSignUpRequest = [
+    validateStrictBody(["name", "rank", "email_id", "password", "code"]),
     validateName,
     validateRank,
     validateEmail,
@@ -114,6 +140,7 @@ const validateSignUpRequest = [
 ];
 
 const validateSignInRequest = [
+    validateStrictBody(["email_id", "password", "code"]),
     validateEmail,
     validatePassword,
     validateCode

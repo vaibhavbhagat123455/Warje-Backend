@@ -1,160 +1,8 @@
 import validator from "validator";
 import { supabase } from "../supabase.js";
 
-async function validateSignup(req, res, next) {
-    const { name, email_id, password, rank, code } = req.body;
-
-    // Basic field check
-    if (!name || !code || !email_id || !password || !rank) {
-        return res.status(400).json({ error: 'UserName, Email, Password, Rank, and OTP are required fields.' });
-    }
-
-    // Email validation
-    if (!validator.isEmail(email_id)) {
-        return res.status(400).json({ error: 'Invalid email format.' });
-    }
-
-    if(password.length < 8) {
-        return res.status(400).json({ error: "Password must contain 8 characters" });
-    }
-
-    // OTP validation
-    if (!/^\d{4}$/.test(code)) {
-        return res.status(400).json({ error: 'OTP must be exactly 4 digits.' });
-    }
-
-    const ALLOWED_RANKS = [
-        "constable",
-        "senior inspector",
-        "inspector",
-        "investigating officer"
-    ];
-
-    if (!ALLOWED_RANKS.includes(rank)) {
-        return res.status(400).json({ error: 'Rank must be constable, senior inspector, inspector or investigating officier' })
-    }
-
-    try {
-        // If a user exists here, they are fully signed up and should not proceed.
-        const { data: existingUser, error: existingUserError } = await supabase
-            .from('users')
-            .select('email_id')
-            .eq('email_id', email_id)
-            .maybeSingle();
-
-        if (existingUserError) throw existingUserError;
-
-        // User is verified and can do login but he is trying to signup
-        if (existingUser) {
-            return res.status(409).json({ error: 'Email already exists' });
-        }
-
-        // This query must succeed to allow verification.
-        const { data: tempUserOtp, error: tempErrorOtp } = await supabase
-            .from('temp_users_otp')
-            .select("code, purpose")
-            .eq('email_id', email_id)
-            .maybeSingle();
-
-        if (tempErrorOtp) throw tempErrorOtp;
-
-        // No entry in db for the particular user
-        if (!tempUserOtp) {
-            return res.status(401).json({ error: "Request for new otp" });
-        }
-
-        // If purpose is invalid
-        if (tempUserOtp.purpose !== "signup") {
-            return res.status(401).json({ error: "Invalid purpose" })
-        }
-
-        // Otp doesn't match
-        if (tempUserOtp.code !== code) {
-            return res.status(401).json({ error: "The provided OTP is invalid." });
-        }
-
-        // Already user in temp_users
-        const { data: tempUser, error: tempError } = await supabase
-            .from("temp_users")
-            .select("email_id")
-            .eq("email_id", email_id)
-            .maybeSingle();
-
-        if (tempError) throw tempError;
-
-        // User is already in temp_user means he is not verified
-        if (tempUser) {
-            return res.status(409).json({ error: "Email id exists but, user is not verified for login" });
-        }
-
-        next();
-
-    } catch (error) {
-        console.error('Signup validation error:', error);
-        return res.status(500).json({ error: 'Internal server error during data processing' });
-    }
-}
-
-// LOGIN INTERCEPTOR
-async function validateLogin(req, res, next) {
-    const { email_id, password, code } = req.body;
-
-    if (!code || !email_id || !password) {
-        return res.status(400).json({ error: 'Email, Password, and OTP are required fields.' });
-    }
-    if (!validator.isEmail(email_id)) {
-        return res.status(400).json({ error: 'Invalid email format.' });
-    }
-
-    if (!/^\d{4}$/.test(code)) {
-        return res.status(400).json({ error: 'OTP must be exactly 4 digits.' });
-    }
-
-    try {
-        // data from temp_users_opt
-        const { data: tempUserOtp, error: tempErrorOtp } = await supabase
-            .from('temp_users_otp')
-            .select("code, purpose")
-            .eq('email_id', email_id)
-            .maybeSingle();
-
-        if (tempErrorOtp) throw tempErrorOtp;
-
-        // No entry in temp_users_otp
-        if (!tempUserOtp) {
-            return res.status(401).json({ error: "Request for new otp" });
-        }
-
-        // Otp didn't match
-        if (tempUserOtp.code !== code) {
-            return res.status(401).json({ error: "The provided OTP is invalid." });
-        }
-
-        // purpose of temp_users_code didn't match
-        if (tempUserOtp.purpose !== "login") {
-            return res.status(401).json({ error: `OTP purpose is invalid.` });
-        }
-
-        // data from temp_users_opt
-        const { data: tempUser, error: tempError } = await supabase
-            .from('temp_users')
-            .select("email_id")
-            .eq('email_id', email_id)
-            .maybeSingle();
-
-        if (tempError) throw tempError;
-
-        if (tempUser) {
-            return res.status(401).json({ error: "User is not verified" });
-        }
-
-        next();
-    }
-    catch (error) {
-        console.error("Login Validation Error:", error);
-        res.status(500).json({ message: "Internal server error during data processing" });
-    }
-}
+import { STATUS, REGEX, USER_RANK } from '../utils/constants.js';
+import { errorResponseBody } from "../utils/responseBody.js";
 
 function validateOtpReq(req, res, next) {
     const { email_id, password } = req.body;
@@ -358,60 +206,74 @@ async function validateGetUnverifiedUsers(req, res, next) {
     }
 }
 
-const validateUserUpdate = async (req, res, next) => {
-    const currentUser = req.user; // Contains { user_id, email_id } from your JWT
-    const { name, rank, email_id, password } = req.body;
+const validateUserUpdate = (req, res, next) => {
+    try {
+        const { name, rank, email_id, password } = req.body;
 
-    const updates = {};
-    if (name) updates.name = name;
-    if (rank) updates.rank = rank;
-    if (password) updates.password = password;
+        const ALLOWED_FIELDS = ["name", "rank", "email_id", "password"];
+        const receivedKeys = Object.keys(req.body);
+        const extraKeys = receivedKeys.filter(key => !ALLOWED_FIELDS.includes(key));
 
-    // --- LOGIC FIX START ---
-    // Only process email if it is provided AND it is DIFFERENT from the current one
-    if (email_id && email_id !== currentUser.email_id) {
-        
-        // 1. Check if this NEW email is taken by someone else
-        const { data: existingUser } = await supabase
-            .from("users")
-            .select("user_id")
-            .eq("email_id", email_id)
-            .neq("user_id", currentUser.user_id) // Safety check
-            .maybeSingle();
-
-        if (existingUser) {
-            return res.status(409).json({ error: "Email ID is already in use." });
+        if (extraKeys.length > 0) {
+            const response = { ...errorResponseBody };
+            response.err = { unexpected_fields: `Unknown fields: ${extraKeys.join(", ")}` };
+            response.message = "Invalid Request Body";
+            return res.status(STATUS.BAD_REQUEST).json(response);
         }
 
-        // 2. If valid, add it to the updates object
-        updates.email_id = email_id;
-    }
-    // --- LOGIC FIX END ---
+        if (receivedKeys.length === 0) {
+            const response = { ...errorResponseBody };
+            response.message = "No fields provided to update.";
+            return res.status(STATUS.BAD_REQUEST).json(response);
+        }
 
-    if (Object.keys(updates).length === 0) {
-        return res.status(400).json({ error: "No fields to update (or data matches current)." });
-    }
+        if (name !== undefined) {
+            if (name.trim().length < 2 || name.trim().length > 20) {
+                const response = { ...errorResponseBody };
+                response.err = { name: "Name must be between 2 and 20 characters." };
+                return res.status(STATUS.BAD_REQUEST).json(response);
+            }
+        }
 
-    try {
-        const targetUserId = currentUser.user_id;
+        if (rank) {
+            if (!Object.values(USER_RANK).includes(rank)) {
+                const response = { ...errorResponseBody };
+                response.err = { rank: `Invalid rank. Allowed: ${Object.values(USER_RANK).join(', ')}` };
+                return res.status(STATUS.BAD_REQUEST).json(response);
+            }
+        }
 
-        // Verify the user exists (Standard check)
-        const { data: user, error: userError } = await supabase
-            .from("users")
-            .select("user_id")
-            .eq("user_id", targetUserId)
-            .maybeSingle();
+        // --- Email Validation ---
+        if (email_id) {
+            if (!REGEX.EMAIL.test(email_id)) {
+                const response = { ...errorResponseBody };
+                response.err = { email_id: "Invalid email format." };
+                return res.status(STATUS.BAD_REQUEST).json(response);
+            }
+        }
 
-        if (userError) throw userError;
-        if (!user) return res.status(404).json({ error: "User account not found." });
+        // --- Password Validation ---
+        if (password) {
+            if (password.length < 8) {
+                const response = { ...errorResponseBody };
+                response.err = { password: "Password must be at least 8 characters." };
+                return res.status(STATUS.BAD_REQUEST).json(response);
+            }
+        }
 
-        req.validUpdates = updates;
-        req.targetUserId = targetUserId;
+        // 3. PREPARE UPDATES OBJECT
+        // This keeps your controller clean. It only sees valid data.
+        req.updates = {};
+        if (name) req.updates.name = name;
+        if (rank) req.updates.rank = rank;
+        if (email_id) req.updates.email_id = email_id;
+        if (password) req.updates.password = password;
+
         next();
 
     } catch (error) {
-        console.log("Validate User Error: ", error);
-        return res.status(500).json({ error: "Internal server error." });
+        console.error("Validation Error:", error);
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json({ message: "Server Error" });
     }
 };
 
@@ -453,14 +315,37 @@ const validateUserDeletion = async(req, res, next) => {
     
 };
 
+// const isAuthenticatedUser = async(user_id) => {
+//     try {
+//         const { data: user } = await supabase
+//             .from("users")
+//             .eq("user_id", user_id)
+//             .select("user_id") 
+//             .single()
+//             .throwOnError();
+        
+//         next();
+
+//     } catch(error) {
+//         console.log(error);
+//         if (error.code === 'PGRST116') {
+//             throw {
+//                 err: { user_id: "User not found." },
+//                 code: STATUS.NOT_FOUND,
+//                 message: "Resource Not Found"
+//             };
+//         }
+//         throw error;
+//     }
+// }
+
 export default {
-    validateSignup,
-    validateLogin,
     validateOtpReq,
     validateRole,
     validateMakeUserVerified,
     validateGetUsers,
     validateGetUnverifiedUsers,
     validateUserUpdate,
-    validateUserDeletion
+    validateUserDeletion,
+    // isAuthenticatedUser
 }

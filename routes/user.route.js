@@ -11,11 +11,22 @@ router.post("/sendOtp", userIntercetor.validateOtpReq, userController.sendOTP)
 router.use(verifyToken);
 router.use(checkTokenRefresh);
 
+router.put(
+    "/:id", 
+    userIntercetor.validateUserUpdate, 
+    userController.updateUser
+);
+
+router.patch(
+    "/:id", 
+    userIntercetor.validateUserUpdate, 
+    userController.updateUser
+);
+
 router.post("/editRole", userIntercetor.validateRole, userController.editRole); 
 router.post("/makeUserVerified", userIntercetor.validateMakeUserVerified, userController.makeUserVerified); 
 router.post("/getUsers", userIntercetor.validateGetUsers, userController.getUsers);
 router.post("/getUnverifiedUsers", userIntercetor.validateGetUnverifiedUsers, userController.getUnverifiedUser)
-router.post("/updateUser", userIntercetor.validateUserUpdate, userController.updateUser);
 router.post("/deleteUser", userIntercetor.validateUserDeletion, userController.deleteUser);
 
 export default router

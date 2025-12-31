@@ -33,13 +33,14 @@ const checkOTPExistence = async(data) => {
                 message: "Validation Error"
             };
         }
+        await supabase.from("temp_users_otp").delete().eq("email_id", data.email_id);
         return true;
         
     } catch (error) {
         if (error.code === 'PGRST116') {
             throw {
                 err: { 
-                    otp: "No OTP found. Please request a verification code." 
+                    otp: "No OTP found. Please request a code." 
                 },
                 code: STATUS.NOT_FOUND, 
                 message: "Resource Not Found"
@@ -65,7 +66,7 @@ const signupUser = async (data) => {
                     rank: data.rank
                 }
             ])
-            .select()
+            .select("temp_user_id, name, rank, email_id")
             .throwOnError();
 
         console.log(responseFromTempUsers);
@@ -135,7 +136,7 @@ const signinUser = async (data) => {
     try {
         await checkOTPExistence(data);
 
-        const { data: user, error } = await supabase
+        const { data: user } = await supabase
             .from("users")
             .select("user_id, name, rank, email_id, password, role") 
             .eq("email_id", data.email_id)
