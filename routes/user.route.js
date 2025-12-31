@@ -11,12 +11,6 @@ router.post("/sendOtp", userIntercetor.validateOtpReq, userController.sendOTP)
 router.use(verifyToken);
 router.use(checkTokenRefresh);
 
-router.put(
-    "/:id", 
-    userIntercetor.validateUserUpdate, 
-    userController.updateUser
-);
-
 router.patch(
     "/:id", 
     userIntercetor.validateUserUpdate, 

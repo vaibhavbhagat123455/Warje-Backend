@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors"; 
 import apiRoutes from "./routes/index.js";
 import dotenv from "dotenv";
 import { apiKeyGuard } from "./apiKeyGuard.js";
@@ -7,15 +8,23 @@ dotenv.config();
 
 const app = express();
 
+
+app.use(cors({
+    origin: "*", 
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    credentials: true
+}));
+
 app.use(express.json());
 
-app.use(apiKeyGuard)
-
-app.use("/api", apiRoutes);
 
 app.get("/", (req, res) => {
-  res.json({ message: "Warje Police Project API" });
+    res.json({ message: "Server is running on Vercel!" });
 });
+
+app.use(apiKeyGuard); 
+
+app.use("/api", apiRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -23,7 +32,6 @@ app.use((req, res) => {
     message: `Cannot ${req.method} ${req.url}`,
   });
 });
-
 
 app.use((err, req, res, next) => {
   console.error(err);
