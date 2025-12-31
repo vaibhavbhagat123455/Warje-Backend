@@ -48,7 +48,6 @@ export const validateName = (req, res, next) => {
             createErrorResponse("name", "Name must be between 2 and 20 characters")
         );
     }
-
     next();
 };
 
@@ -82,7 +81,7 @@ export const validatePassword = (req, res, next) => {
     next();
 };
 
-const validateCode = (req, res, next) => {
+export const validateCode = (req, res, next) => {
     if (!req.body.code) {
         return res.status(STATUS.BAD_REQUEST).json(
             createErrorResponse("otp", "OTP is required")

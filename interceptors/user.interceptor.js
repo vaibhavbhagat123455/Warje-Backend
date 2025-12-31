@@ -3,6 +3,7 @@ import { supabase } from "../supabase.js";
 
 import { STATUS, REGEX, USER_RANK } from '../utils/constants.js';
 import { errorResponseBody } from "../utils/responseBody.js";
+import { validateCode, validateEmail, validatePassword, validateStrictBody } from "./auth.interceptor.js";
 
 function validateOtpReq(req, res, next) {
     const { email_id, password } = req.body;
@@ -208,6 +209,15 @@ async function validateGetUnverifiedUsers(req, res, next) {
 
 const validateUserUpdate = (req, res, next) => {
     try {
+        const user_id = req.params.id;
+
+        if (!user_id) {
+            const response = { ...errorResponseBody };
+            response.err = { user_id: "User ID is required for updates." };
+            response.message = "Validation Error";
+            return res.status(STATUS.BAD_REQUEST).json(response);
+        }
+
         const { name, rank, email_id, password } = req.body;
 
         const ALLOWED_FIELDS = ["name", "rank", "email_id", "password"];
@@ -235,7 +245,7 @@ const validateUserUpdate = (req, res, next) => {
             }
         }
 
-        if (rank) {
+        if (rank !== undefined) {
             if (!Object.values(USER_RANK).includes(rank)) {
                 const response = { ...errorResponseBody };
                 response.err = { rank: `Invalid rank. Allowed: ${Object.values(USER_RANK).join(', ')}` };
@@ -243,8 +253,7 @@ const validateUserUpdate = (req, res, next) => {
             }
         }
 
-        // --- Email Validation ---
-        if (email_id) {
+        if (email_id !== undefined) {
             if (!REGEX.EMAIL.test(email_id)) {
                 const response = { ...errorResponseBody };
                 response.err = { email_id: "Invalid email format." };
@@ -252,8 +261,7 @@ const validateUserUpdate = (req, res, next) => {
             }
         }
 
-        // --- Password Validation ---
-        if (password) {
+        if (password !== undefined) {
             if (password.length < 8) {
                 const response = { ...errorResponseBody };
                 response.err = { password: "Password must be at least 8 characters." };
@@ -261,8 +269,6 @@ const validateUserUpdate = (req, res, next) => {
             }
         }
 
-        // 3. PREPARE UPDATES OBJECT
-        // This keeps your controller clean. It only sees valid data.
         req.updates = {};
         if (name) req.updates.name = name;
         if (rank) req.updates.rank = rank;
@@ -279,65 +285,31 @@ const validateUserUpdate = (req, res, next) => {
 
 const validateUserDeletion = async(req, res, next) => {
     // const currentUser = req.user;
-    const { user_id } = req.body;
+    // const user_id = req.params.id;
 
-    // if(currentUser.user_id !== user_id) {
-    //     return res.status(404).json({ error: "Invalid user id" });
+    // if (!user_id) {
+    //     const response = { ...errorResponseBody };
+    //     response.err = { user_id: "User ID is required." };
+    //     response.message = "Validation Error";
+    //     return res.status(STATUS.BAD_REQUEST).json(response);
     // }
 
-    // 1. Check if User ID exists
-    if (!user_id) {
-        return res.status(400).json({ error: "User ID is required for update." });
-    }
+    // const isSelfDelete = (currentUser.user_id === user_id);
+    // const isAdmin = (currentUser.role === 'ADMIN'); 
 
-    try {
-        const { data: user, error: userError } = await supabase
-            .from("users")
-            .select("user_id")
-            .eq("user_id", user_id)
-            .maybeSingle();
-
-        if (userError) throw userError;
-
-        // user not found in db
-        if (!user) {
-            return res.status(404).json({ error: "User account not found." });
-        }
-
-        // 4. Pass the validated ID to the controller
-        req.validUserId = user_id; 
-        next();
-    }
-    catch (error) {
-        console.log("Validate Users deletion error: ", error);
-        return res.status(500).json({ error: "Internal server error during data processing" });
-    }
-    
+    // if (!isSelfDelete && !isAdmin) {
+    //     const response = { ...errorResponseBody };
+    //     response.message = "Access Denied. You do not have permission to delete this user.";
+    //     return res.status(STATUS.FORBIDDEN).json(response);
+    // }
 };
 
-// const isAuthenticatedUser = async(user_id) => {
-//     try {
-//         const { data: user } = await supabase
-//             .from("users")
-//             .eq("user_id", user_id)
-//             .select("user_id") 
-//             .single()
-//             .throwOnError();
-        
-//         next();
-
-//     } catch(error) {
-//         console.log(error);
-//         if (error.code === 'PGRST116') {
-//             throw {
-//                 err: { user_id: "User not found." },
-//                 code: STATUS.NOT_FOUND,
-//                 message: "Resource Not Found"
-//             };
-//         }
-//         throw error;
-//     }
-// }
+const validateResetPass = [
+    validateStrictBody(["email_id, newPassword, code"]),
+    validateEmail,
+    validatePassword,
+    validateCode
+];
 
 export default {
     validateOtpReq,
@@ -347,5 +319,5 @@ export default {
     validateGetUnverifiedUsers,
     validateUserUpdate,
     validateUserDeletion,
-    // isAuthenticatedUser
+    validateResetPass
 }

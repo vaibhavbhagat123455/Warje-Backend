@@ -5,6 +5,8 @@ import { supabase } from "../supabase.js"
 import { STATUS, OTP_PURPOSE } from "../utils/constants.js"
 import { successResponseBody, errorResponseBody } from "../utils/responseBody.js"
 import userService from "../services/user.service.js"
+import { checkOTPExistence } from "../services/auth.service.js"
+
 
 dotenv.config();
 
@@ -318,23 +320,68 @@ const updateUser = async(req, res) => {
     }
 }
 
-async function deleteUser(req, res) {
+const resetPassword = async (req, res) => {
     try {
-        const user_id = req.validUserId;
+        const { email_id, code, newPassword } = req.body;
+    
+        await checkOTPExistence({ email_id, code });
 
-        const { error } = await supabase
-            .from("users")
-            .delete()
-            .eq("user_id", user_id);
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-        if (error) throw error;
+        const { data: updatedUser } = await supabase
+                .from("users")
+                .update({ password: hashedPassword })
+                .eq("email_id", email_id)
+                .select("user_id, email_id")
+                .single()
+                .throwOnError();
 
-        res.status(200).json({ message: "User deleted successfully" });
+        const response = { ...successResponseBody };
+        response.message = "Password reset successfully. You can now login.";
+        response.data = { email_id: updatedUser.email_id };
+        
+        return res.status(STATUS.OK).json(response); 
+    } catch(error) {
+        console.error("Reset Password Error:", error);
 
-    } catch (error) {
-        console.error("Delete User Error:", error);
-        res.status(500).json({ error: "Internal server error during user deletion." });
+        if (error.code === 'PGRST116') {
+            throw {
+                err: { email_id: "User with this email does not exist." },
+                code: STATUS.NOT_FOUND,
+                message: "Resource Not Found"
+            };
+        }
+
+        if (error.code === '23514') {
+            if (error.message.includes("t_users_password_check")) {
+                throw {
+                    err: { password: "Password must be at least 8 characters." },
+                    code: STATUS.UNPROCESSABLE_ENTITY, 
+                    message: "Validation Error"
+                };
+            }
+        }
+        throw error;
     }
+}
+
+async function deleteUser(req, res) {
+    // try {
+    //     const user_id = req.validUserId;
+
+    //     const { error } = await supabase
+    //         .from("users")
+    //         .delete()
+    //         .eq("user_id", user_id);
+
+    //     if (error) throw error;
+
+    //     res.status(200).json({ message: "User deleted successfully" });
+
+    // } catch (error) {
+    //     console.error("Delete User Error:", error);
+    //     res.status(500).json({ error: "Internal server error during user deletion." });
+    // }
 }
 
 export default {
@@ -344,5 +391,6 @@ export default {
 	getUsers,
 	getUnverifiedUser,
 	updateUser,
-	deleteUser
+	deleteUser,
+    resetPassword
 };

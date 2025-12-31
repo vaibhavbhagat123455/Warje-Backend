@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken"
 
 import { STATUS } from '../utils/constants.js';
 
-const checkOTPExistence = async(data) => {
+export const checkOTPExistence = async(data) => {
     try {
         const { data: responseFromOtp } = await supabase
             .from("temp_users_otp")
