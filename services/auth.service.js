@@ -138,12 +138,20 @@ const signinUser = async (data) => {
 
         const { data: user } = await supabase
             .from("users")
-            .select("user_id, name, rank, email_id, password, role") 
+            .select("user_id, name, rank, email_id, password, role, is_deleted") 
             .eq("email_id", data.email_id)
             .single()
             .throwOnError();
         
         const isPasswordValid = await bcrypt.compare(data.password, user.password);
+
+        if(user.is_deleted) {
+            throw {
+                err: { account_status: "Account is deactivated." },
+                code: STATUS.FORBIDDEN, 
+                message: "This account has been deleted. Please contact an administrator to restore access."
+            };
+        }
 
         if (!isPasswordValid) {
             throw {

@@ -28,7 +28,8 @@ router.patch(
     userController.updateUser
 );
 
-router.delete("/:id", 
+router.delete(
+    "/:id", 
     userIntercetor.validateUserDeletion, 
     userController.deleteUser
 );

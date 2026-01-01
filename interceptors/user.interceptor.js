@@ -1,6 +1,6 @@
 import { supabase } from "../supabase.js";
 
-import { STATUS, REGEX, USER_RANK } from '../utils/constants.js';
+import { STATUS, REGEX, USER_RANK, USER_ROLE } from '../utils/constants.js';
 import { errorResponseBody } from "../utils/responseBody.js";
 import { validateCode, validateEmail, validatePassword, validateStrictBody, validateName } from "./auth.interceptor.js";
 
@@ -337,38 +337,88 @@ const isNotTempUser = async (data) => {
         if(tempUserError) throw tempUserError;
 
         if (tempUser) {
-            const response = { ...errorResponseBody };
-            response.message = "User registration is pending admin approval. You cannot login or signup again yet.";
-            return res.status(STATUS.FORBIDDEN).json(response);
+            errorResponseBody.message = "User registration is pending admin approval. You cannot login or signup again yet.";
+            return res.status(STATUS.FORBIDDEN).json(errorResponseBody);
         }
 
         return true;
     } catch(error) {
         console.log("Is Temp user error: ", error);
+        if (error.code === 'PGRST116') {
+            errorResponseBody.err = { email_id: "User not found. Please sign up." };
+            errorResponseBody.message = "Authentication Failed";
+            return res.status(STATUS.NOT_FOUND).json(errorResponseBody);
+        }
+
         errorResponseBody.message = "Something went wrong.";
         return res.status(STATUS.INTERNAL_SERVER_ERROR).json(errorResponseBody);
     }
 }
 
+const isAdmin = async (data) => {
+    try {
+        const { user_id } = data;
+
+        const { data: user } = await supabase
+            .from("users")
+            .select("role")
+            .eq("user_id", user_id)
+            .single()
+            .throwOnError();
+            
+        if (user && user.role !== USER_ROLE.ADMIN) {
+            throw {          
+                code: STATUS.FORBIDDEN,
+                message: "Access denied. Admin privileges required.",
+                err: { role: "Insufficient permissions" }
+            }
+        }
+        return true;
+
+    } catch(error) {
+        console.log("Is admin error: ", error);
+        if (error.code === 'PGRST116') {
+            throw {
+                code: STATUS.NOT_FOUND,
+                err: { email_id: "User not found. Please sign up." },
+                message: "Authentication Failed"
+            };        
+        }
+
+        throw error;
+    }
+}
+
 const validateUserDeletion = async(req, res, next) => {
-    // const currentUser = req.user;
-    // const user_id = req.params.id;
+    const currentUser = req.user;
+    const user_id = req.params.id;
 
-    // if (!user_id) {
-    //     const response = { ...errorResponseBody };
-    //     response.err = { user_id: "User ID is required." };
-    //     response.message = "Validation Error";
-    //     return res.status(STATUS.BAD_REQUEST).json(response);
-    // }
+    if (!user_id) {
+        errorResponseBody.err = { user_id: "User ID is required." };
+        errorResponseBody.message = "Validation Error";
+        return res.status(STATUS.BAD_REQUEST).json(errorResponseBody);
+    }
 
-    // const isSelfDelete = (currentUser.user_id === user_id);
-    // const isAdmin = (currentUser.role === 'ADMIN'); 
+    const isSamePerson = currentUser.user_id === user_id;
 
-    // if (!isSelfDelete && !isAdmin) {
-    //     const response = { ...errorResponseBody };
-    //     response.message = "Access Denied. You do not have permission to delete this user.";
-    //     return res.status(STATUS.FORBIDDEN).json(response);
-    // }
+    try {
+        if (!isSamePerson) {
+            await isAdmin({ user_id: currentUser.user_id }); 
+        }
+        
+    } catch(error) {
+        if(error.code) {
+            const response = { ...errorResponseBody };
+            response.message = error.message;
+            response.err = error.err;            
+            return res.status(error.code).json(response);
+        }
+        const response = { ...errorResponseBody };
+        response.message = "Something went wrong.";
+        return res.status(STATUS.BAD_REQUEST).json(response);
+    }
+
+    next();
 };
 
 const validateResetPass = [

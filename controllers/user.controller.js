@@ -226,24 +226,34 @@ const resetPassword = async (req, res) => {
     }
 }
 
-async function deleteUser(req, res) {
-    // try {
-    //     const user_id = req.validUserId;
+const deleteUser = async (req, res) => {
+    try {
+        const user_id = req.params.id;
 
-    //     const { error } = await supabase
-    //         .from("users")
-    //         .delete()
-    //         .eq("user_id", user_id);
+        const {  } = await supabase
+            .from("users")
+            .update({ is_deleted: true, deleted_at: new Date().toISOString() }) 
+            .eq("user_id", user_id)
+			.throwOnError();
+		
+		const response = { ...successResponseBody };
+        response.message = "User account deactivated successfully.";
+        
+        return res.status(STATUS.OK).json(response);
 
-    //     if (error) throw error;
+    } catch (error) {
+        console.error("Delete User Error:", error);
+		
+		if (error.code === 'PGRST116') {
+			errorResponseBody.err = { email_id: "User not found. Please sign up." };
+			errorResponseBody.message = "Authentication Failed";
+			return res.status(STATUS.NOT_FOUND).json(errorResponseBody);
+        }
 
-    //     res.status(200).json({ message: "User deleted successfully" });
-
-    // } catch (error) {
-    //     console.error("Delete User Error:", error);
-    //     res.status(500).json({ error: "Internal server error during user deletion." });
-    // }
-}
+        errorResponseBody.message = "Internal server error during user deletion.";
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(errorResponseBody);
+    }
+};
 
 export default {
 	sendOTP,
