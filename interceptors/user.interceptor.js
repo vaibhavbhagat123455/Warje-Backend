@@ -405,6 +405,8 @@ const validateUserDeletion = async(req, res, next) => {
         if (!isSamePerson) {
             await isAdmin({ user_id: currentUser.user_id }); 
         }
+    
+        next();
         
     } catch(error) {
         if(error.code) {
@@ -417,8 +419,42 @@ const validateUserDeletion = async(req, res, next) => {
         response.message = "Something went wrong.";
         return res.status(STATUS.BAD_REQUEST).json(response);
     }
+};
 
-    next();
+const validateUpdateDeleted = async(req, res, next) => {
+    const currentUser = req.user;
+    const user_id = req.params.id;
+
+    if (!user_id) {
+        errorResponseBody.err = { user_id: "User ID is required." };
+        errorResponseBody.message = "Validation Error";
+        return res.status(STATUS.BAD_REQUEST).json(errorResponseBody);
+    }
+
+    const isSamePerson = currentUser.user_id === user_id;
+
+    try {
+        if (isSamePerson) {
+            throw {
+                message: "Access Denied. You are not authorized to deactivate another user's account.",
+                code: STATUS.FORBIDDEN 
+            }
+        }
+
+        await isAdmin({ user_id: currentUser.user_id });
+        next(); 
+
+    } catch(error) {
+        if(error.code) {
+            const response = { ...errorResponseBody };
+            response.message = error.message;
+            response.err = error.err;            
+            return res.status(error.code).json(response);
+        }
+        const response = { ...errorResponseBody };
+        response.message = "Something went wrong.";
+        return res.status(STATUS.BAD_REQUEST).json(response);
+    }
 };
 
 const validateResetPass = [
@@ -437,5 +473,6 @@ export default {
     validateUserUpdate,
     validateUserDeletion,
     validateResetPass,
-    isNotTempUser
+    isNotTempUser,
+    validateUpdateDeleted
 }

@@ -255,6 +255,35 @@ const deleteUser = async (req, res) => {
     }
 };
 
+const updateIsDeleted = async (req, res) => {
+    try {
+        const user_id = req.params.id;
+
+        const {  } = await supabase
+            .from("users")
+            .update({ is_deleted: false, deleted_at: null }) 
+            .eq("user_id", user_id)
+			.throwOnError();
+		
+		const response = { ...successResponseBody };
+        response.message = "User account activated successfully.";
+        
+        return res.status(STATUS.OK).json(response);
+
+    } catch (error) {
+        console.error("UpdateisDelete User Error:", error);
+		
+		if (error.code === 'PGRST116') {
+			errorResponseBody.err = { email_id: "User not found. Please sign up." };
+			errorResponseBody.message = "Authentication Failed";
+			return res.status(STATUS.NOT_FOUND).json(errorResponseBody);
+        }
+
+        errorResponseBody.message = "Internal server error during user deletion.";
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(errorResponseBody);
+    }
+};
+
 export default {
 	sendOTP,
 	editRole,
@@ -263,5 +292,6 @@ export default {
 	getUnverifiedUser,
 	updateUser,
 	deleteUser,
-    resetPassword
+    resetPassword,
+	updateIsDeleted
 };

@@ -34,6 +34,11 @@ router.delete(
     userController.deleteUser
 );
 
+router.patch(
+    "/:id/status",
+    userIntercetor.validateUpdateDeleted,
+    userController.updateIsDeleted
+)
 
 router.post("/editRole", userIntercetor.validateRole, userController.editRole); 
 router.post("/makeUserVerified", userIntercetor.validateMakeUserVerified, userController.makeUserVerified); 
