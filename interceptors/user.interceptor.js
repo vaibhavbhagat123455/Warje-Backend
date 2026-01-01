@@ -1,25 +1,11 @@
-import validator from "validator";
 import { supabase } from "../supabase.js";
 
 import { STATUS, REGEX, USER_RANK } from '../utils/constants.js';
 import { errorResponseBody } from "../utils/responseBody.js";
 import { validateCode, validateEmail, validatePassword, validateStrictBody, validateName } from "./auth.interceptor.js";
 
-// function validateOtpReq(req, res, next) {
-//     const { email_id, password } = req.body;
 
-//     if (!email_id || !password) {
-//         return res.status(400).json({ error: 'Both emailID and password are required fields.' });
-//     }
-
-//     if (!validator.isEmail(email_id)) {
-//         return res.status(400).json({ error: 'Invalid email format.' });
-//     }
-
-//     next();
-// }
-
-export const validateOtpReq = (req, res, next) => {
+const validateOtpReq = (req, res, next) => {
     const { purpose } = req.body;
 
     const rules = {
@@ -386,7 +372,7 @@ const validateUserDeletion = async(req, res, next) => {
 };
 
 const validateResetPass = [
-    validateStrictBody(["email_id, newPassword, code"]),
+    validateStrictBody(["email_id", "password", "code"]),
     validateEmail,
     validatePassword,
     validateCode

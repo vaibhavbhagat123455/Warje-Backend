@@ -1,4 +1,5 @@
 import { supabase } from "../supabase.js"
+import bcrypt, { hash } from "bcryptjs"
 
 import { STATUS } from "../utils/constants.js"
 import { successResponseBody, errorResponseBody } from "../utils/responseBody.js"
@@ -179,11 +180,11 @@ const updateUser = async(req, res) => {
 
 const resetPassword = async (req, res) => {
     try {
-        const { email_id, code, newPassword } = req.body;
+        const { email_id, code, password } = req.body;
     
         await checkOTPExistence({ email_id, code });
 
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         const { data: updatedUser } = await supabase
                 .from("users")
@@ -193,32 +194,35 @@ const resetPassword = async (req, res) => {
                 .single()
                 .throwOnError();
 
-        const response = { ...successResponseBody };
-        response.message = "Password reset successfully. You can now login.";
-        response.data = { email_id: updatedUser.email_id };
+        successResponseBody.message = "Password reset successfully. You can now login.";
+        successResponseBody.data = { email_id: updatedUser.email_id };
         
-        return res.status(STATUS.OK).json(response); 
+        return res.status(STATUS.OK).json(successResponseBody); 
     } catch(error) {
-        console.error("Reset Password Error:", error);
+        console.error("Reset Password Controller Error:", error);
 
         if (error.code === 'PGRST116') {
-            throw {
-                err: { email_id: "User with this email does not exist." },
-                code: STATUS.NOT_FOUND,
-                message: "Resource Not Found"
-            };
+            errorResponseBody.err = { email_id: "User with this email does not exist." };
+            errorResponseBody.message = "Validation error";
+            return res.status(STATUS.NOT_FOUND).json(errorResponseBody);
         }
 
         if (error.code === '23514') {
             if (error.message.includes("t_users_password_check")) {
-                throw {
-                    err: { password: "Password must be at least 8 characters." },
-                    code: STATUS.UNPROCESSABLE_ENTITY, 
-                    message: "Validation Error"
-                };
+                errorResponseBody.err = { password: "Password must be at least 8 characters." };
+                errorResponseBody.message = "Validation error";
+                return res.status(STATUS.UNPROCESSABLE_ENTITY.code).json(errorResponseBody);
             }
         }
-        throw error;
+        
+        if(error.code) {
+            errorResponseBody.err = error.err;
+            errorResponseBody.message = error.message;
+            return res.status(error.code).json(errorResponseBody);
+        }
+        errorResponseBody.err = error;
+        errorResponseBody.message = "Something went wrong.";
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(errorResponseBody);
     }
 }
 
