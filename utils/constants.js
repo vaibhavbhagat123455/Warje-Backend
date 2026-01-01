@@ -37,7 +37,8 @@ export const STATUS = {
 
 export const OTP_PURPOSE = {
     SIGNIN: "SIGNIN",
-    SIGNUP: "SIGNUP"
+    SIGNUP: "SIGNUP",
+    RESET_PASSWORD: "RESET_PASSWORD"
 }
 
 export const REGEX = {

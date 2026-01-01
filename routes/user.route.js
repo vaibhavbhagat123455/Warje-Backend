@@ -6,7 +6,12 @@ import { checkTokenRefresh } from "../interceptors/checkTokenRefresh.js"
 
 const router = express.Router()
 
-router.post("/sendOtp", userIntercetor.validateOtpReq, userController.sendOTP) 
+router.post(
+    "/send-otp", 
+    // userIntercetor.isNotTempUser,
+    userIntercetor.validateOtpReq, 
+    userController.sendOTP
+); 
 
 router.patch(
     "/reset", 

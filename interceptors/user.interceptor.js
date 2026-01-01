@@ -3,21 +3,76 @@ import { supabase } from "../supabase.js";
 
 import { STATUS, REGEX, USER_RANK } from '../utils/constants.js';
 import { errorResponseBody } from "../utils/responseBody.js";
-import { validateCode, validateEmail, validatePassword, validateStrictBody } from "./auth.interceptor.js";
+import { validateCode, validateEmail, validatePassword, validateStrictBody, validateName } from "./auth.interceptor.js";
 
-function validateOtpReq(req, res, next) {
-    const { email_id, password } = req.body;
+// function validateOtpReq(req, res, next) {
+//     const { email_id, password } = req.body;
 
-    if (!email_id || !password) {
-        return res.status(400).json({ error: 'Both emailID and password are required fields.' });
+//     if (!email_id || !password) {
+//         return res.status(400).json({ error: 'Both emailID and password are required fields.' });
+//     }
+
+//     if (!validator.isEmail(email_id)) {
+//         return res.status(400).json({ error: 'Invalid email format.' });
+//     }
+
+//     next();
+// }
+
+export const validateOtpReq = (req, res, next) => {
+    const { purpose } = req.body;
+
+    const rules = {
+        SIGNUP: {
+            allowedKeys: ["name", "email_id", "purpose"],
+            validators: [validateName, validateEmail] 
+        },
+        SIGNIN: {
+            allowedKeys: ["email_id", "purpose"],
+            validators: [validateEmail]
+        },
+        RESET_PASSWORD: {
+            allowedKeys: ["email_id", "purpose"],
+            validators: [validateEmail] 
+        }
+    };
+
+    const selectedRule = rules[purpose]; 
+
+    if (!selectedRule) {
+        return res.status(STATUS.BAD_REQUEST).json({
+            success: false,
+            message: "Validation Error",
+            err: { purpose: "Invalid or missing purpose. Must be SIGNUP, SIGNIN, or RESET_PASSWORD" }
+        });
     }
 
-    if (!validator.isEmail(email_id)) {
-        return res.status(400).json({ error: 'Invalid email format.' });
+    const receivedKeys = Object.keys(req.body);
+    const extraKeys = receivedKeys.filter(key => !selectedRule.allowedKeys.includes(key));
+    
+    if (extraKeys.length > 0) {
+        return res.status(STATUS.BAD_REQUEST).json({
+            success: false,
+            message: "Validation Error",
+            err: { unexpected_fields: `Invalid Request. Unknown fields: ${extraKeys.join(", ")}` }
+        });
     }
 
-    next();
-}
+    const runValidators = (index) => {
+        if (index >= selectedRule.validators.length) {
+            return next();
+        }
+
+        const currentValidator = selectedRule.validators[index];
+        
+        currentValidator(req, res, (err) => {
+            if (err) return next(err); 
+            runValidators(index + 1);
+        });
+    };
+
+    runValidators(0);
+};
 
 async function validateRole(req, res, next) {
     const currentUser = req.user;
@@ -283,6 +338,32 @@ const validateUserUpdate = (req, res, next) => {
     }
 };
 
+const isNotTempUser = async (data) => {
+    try {
+        const { email_id } = data;
+
+        const { data: tempUser, error: tempUserError } = await supabase
+            .from("temp_users")
+            .select("name")
+            .eq("email_id", email_id)
+            .maybeSingle();
+
+        if(tempUserError) throw tempUserError;
+
+        if (tempUser) {
+            const response = { ...errorResponseBody };
+            response.message = "User registration is pending admin approval. You cannot login or signup again yet.";
+            return res.status(STATUS.FORBIDDEN).json(response);
+        }
+
+        return true;
+    } catch(error) {
+        console.log("Is Temp user error: ", error);
+        errorResponseBody.message = "Something went wrong.";
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(errorResponseBody);
+    }
+}
+
 const validateUserDeletion = async(req, res, next) => {
     // const currentUser = req.user;
     // const user_id = req.params.id;
@@ -319,5 +400,6 @@ export default {
     validateGetUnverifiedUsers,
     validateUserUpdate,
     validateUserDeletion,
-    validateResetPass
+    validateResetPass,
+    isNotTempUser
 }
