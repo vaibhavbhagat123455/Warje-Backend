@@ -57,7 +57,18 @@ router.patch(
     userController.makeUserVerified
 ); 
 
-router.post("/getUsers", userIntercetor.validateGetUsers, userController.getUsers);
-router.post("/getUnverifiedUsers", userIntercetor.validateGetUnverifiedUsers, userController.getUnverifiedUser)
+router.get(
+    "/", 
+    validateStrictBody([""]),
+    userIntercetor.validateGetUsers, 
+    userController.getUsers
+);
+
+router.get(
+    "/unverified", 
+    validateStrictBody([""]),
+    userIntercetor.validateGetUnverifiedUsers, 
+    userController.getUnverifiedUser
+)
 
 export default router

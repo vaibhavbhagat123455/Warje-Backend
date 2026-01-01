@@ -11,7 +11,7 @@ const validateOtpReq = (req, res, next) => {
     const rules = {
         SIGNUP: {
             allowedKeys: ["name", "email_id", "purpose"],
-            validators: [validateName, validateEmail] 
+            validators: [validateName, validateEmail]
         },
         SIGNIN: {
             allowedKeys: ["email_id", "purpose"],
@@ -19,11 +19,11 @@ const validateOtpReq = (req, res, next) => {
         },
         RESET_PASSWORD: {
             allowedKeys: ["email_id", "purpose"],
-            validators: [validateEmail] 
+            validators: [validateEmail]
         }
     };
 
-    const selectedRule = rules[purpose]; 
+    const selectedRule = rules[purpose];
 
     if (!selectedRule) {
         return res.status(STATUS.BAD_REQUEST).json({
@@ -35,7 +35,7 @@ const validateOtpReq = (req, res, next) => {
 
     const receivedKeys = Object.keys(req.body);
     const extraKeys = receivedKeys.filter(key => !selectedRule.allowedKeys.includes(key));
-    
+
     if (extraKeys.length > 0) {
         return res.status(STATUS.BAD_REQUEST).json({
             success: false,
@@ -50,9 +50,9 @@ const validateOtpReq = (req, res, next) => {
         }
 
         const currentValidator = selectedRule.validators[index];
-        
+
         currentValidator(req, res, (err) => {
-            if (err) return next(err); 
+            if (err) return next(err);
             runValidators(index + 1);
         });
     };
@@ -63,20 +63,20 @@ const validateOtpReq = (req, res, next) => {
 const validateRole = async (req, res, next) => {
     const currentUser = req.user;
 
-    const user_id  = req.params.id;
-    
+    const user_id = req.params.id;
+
     if (!user_id) {
         const response = { ...errorResponseBody };
         response.err = { user_id: "User ID is required." };
         response.message = "Validation Error";
         return res.status(STATUS.BAD_REQUEST).json(response);
     }
-    
+
     if (String(user_id) === String(currentUser.user_id)) {
         const response = { ...errorResponseBody };
         response.message = "Operation Failed: You cannot change your own role.";
         response.err = { user_id: "Self-modification is not allowed." };
-        
+
         return res.status(STATUS.FORBIDDEN).json(response);
     }
 
@@ -86,10 +86,10 @@ const validateRole = async (req, res, next) => {
         next();
     }
     catch (error) {
-        if(error.code) {
+        if (error.code) {
             const response = { ...errorResponseBody };
             response.message = error.message;
-            response.err = error.err;            
+            response.err = error.err;
             return res.status(error.code).json(response);
         }
         const response = { ...errorResponseBody };
@@ -98,7 +98,7 @@ const validateRole = async (req, res, next) => {
     }
 }
 
-async function validateUserVerified(req, res, next) {
+const validateUserVerified = async (req, res, next) => {
     const currentUser = req.user;
     const user_id = req.params.id;
 
@@ -113,7 +113,7 @@ async function validateUserVerified(req, res, next) {
         const response = { ...errorResponseBody };
         response.message = "Operation Failed: You cannot change your own role.";
         response.err = { user_id: "Self-modification is not allowed." };
-        
+
         return res.status(STATUS.FORBIDDEN).json(response);
     }
 
@@ -123,62 +123,61 @@ async function validateUserVerified(req, res, next) {
         next();
     }
     catch (error) {
-        console.error("Verification Error:", error);
-        res.status(500).json({ message: "Internal server error during data processing" });
+        if (error.code) {
+            const response = { ...errorResponseBody };
+            response.message = error.message;
+            response.err = error.err;
+            return res.status(error.code).json(response);
+        }
+
+        console.log("Verification Middleware Error:", error);
+        const response = { ...errorResponseBody };
+        response.message = "Internal server error during verification validation.";
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
-async function validateGetUsers(req, res, next) {
+const validateGetUsers = async (req, res, next) => {
     const currentUser = req.user;
+
     try {
-        const { data: user, error: userError } = await supabase
-            .from("users")
-            .select("role")
-            .eq("user_id", currentUser.user_id)
-            .maybeSingle();
+        await isAdmin({ user_id: currentUser.user_id });
+        next();
 
-        if (userError) throw userError;
-
-        // user not found in db
-        if (!user) {
-            return res.status(404).json({ error: "Authenticated user not found" });
+    } catch (error) {
+        if (error.code) {
+            const response = { ...errorResponseBody };
+            response.message = error.message;
+            response.err = error.err;
+            return res.status(error.code).json(response);
         }
 
-        next();
-    }
-    catch (error) {
-        console.log("Verified Users validation error: ", error);
-        return res.status(500).json({ error: "Internal server error during data processing" });
+        console.log("Verification Middleware Error:", error);
+        const response = { ...errorResponseBody };
+        response.message = "Internal server error during verification validation.";
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
-async function validateGetUnverifiedUsers(req, res, next) {
+const validateGetUnverifiedUsers = async(req, res, next) => {
     const currentUser = req.user;
+
     try {
-        const { data: user, error: userError } = await supabase
-            .from("users")
-            .select("role")
-            .eq("user_id", currentUser.user_id)
-            .maybeSingle();
-
-        if (userError) throw userError;
-
-        // SI or admin not found in db
-        if (!user) {
-            return res.status(404).json({ error: "Authenticated user not found" });
-        }
-
-        // user is not admin
-        const ADMIN_ROLE = 2;
-        if (user.role !== ADMIN_ROLE ) {
-            return res.status(403).json({ message: "Access Forbidden: Only Administrators can get details."});
-        }
-
+        await isAdmin({ user_id: currentUser.user_id });
         next();
-    }
-    catch (error) {
-        console.log("Unverified Users validation error: ", error);
-        return res.status(500).json({ error: "Internal server error during data processing" });
+
+    } catch (error) {
+        if (error.code) {
+            const response = { ...errorResponseBody };
+            response.message = error.message;
+            response.err = error.err;
+            return res.status(error.code).json(response);
+        }
+
+        console.log("Verification Middleware Error:", error);
+        const response = { ...errorResponseBody };
+        response.message = "Internal server error during verification validation.";
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
@@ -268,7 +267,7 @@ const isNotTempUser = async (data) => {
             .eq("email_id", email_id)
             .maybeSingle();
 
-        if(tempUserError) throw tempUserError;
+        if (tempUserError) throw tempUserError;
 
         if (tempUser) {
             errorResponseBody.message = "User registration is pending admin approval. You cannot login or signup again yet.";
@@ -276,7 +275,7 @@ const isNotTempUser = async (data) => {
         }
 
         return true;
-    } catch(error) {
+    } catch (error) {
         console.log("Is Temp user error: ", error);
         if (error.code === 'PGRST116') {
             errorResponseBody.err = { email_id: "User not found. Please sign up." };
@@ -299,9 +298,9 @@ const isAdmin = async (data) => {
             .eq("user_id", user_id)
             .single()
             .throwOnError();
-            
+
         if (user && user.role !== USER_ROLE.ADMIN) {
-            throw {          
+            throw {
                 code: STATUS.FORBIDDEN,
                 message: "Access denied. Admin privileges required.",
                 err: { role: "Insufficient permissions" }
@@ -309,21 +308,21 @@ const isAdmin = async (data) => {
         }
         return true;
 
-    } catch(error) {
+    } catch (error) {
         console.log("Is admin error: ", error);
         if (error.code === 'PGRST116') {
             throw {
                 code: STATUS.NOT_FOUND,
                 err: { email_id: "User not found. Please sign up." },
                 message: "Authentication Failed"
-            };        
+            };
         }
 
         throw error;
     }
 }
 
-const validateUserDeletion = async(req, res, next) => {
+const validateUserDeletion = async (req, res, next) => {
     const currentUser = req.user;
     const user_id = req.params.id;
 
@@ -337,16 +336,16 @@ const validateUserDeletion = async(req, res, next) => {
 
     try {
         if (!isSamePerson) {
-            await isAdmin({ user_id: currentUser.user_id }); 
+            await isAdmin({ user_id: currentUser.user_id });
         }
-    
+
         next();
-        
-    } catch(error) {
-        if(error.code) {
+
+    } catch (error) {
+        if (error.code) {
             const response = { ...errorResponseBody };
             response.message = error.message;
-            response.err = error.err;            
+            response.err = error.err;
             return res.status(error.code).json(response);
         }
         const response = { ...errorResponseBody };
@@ -355,7 +354,7 @@ const validateUserDeletion = async(req, res, next) => {
     }
 };
 
-const validateUpdateDeleted = async(req, res, next) => {
+const validateUpdateDeleted = async (req, res, next) => {
     const currentUser = req.user;
     const user_id = req.params.id;
 
@@ -371,18 +370,18 @@ const validateUpdateDeleted = async(req, res, next) => {
         if (isSamePerson) {
             throw {
                 message: "Access Denied. You are not authorized to deactivate another user's account.",
-                code: STATUS.FORBIDDEN 
+                code: STATUS.FORBIDDEN
             }
         }
 
         await isAdmin({ user_id: currentUser.user_id });
-        next(); 
+        next();
 
-    } catch(error) {
-        if(error.code) {
+    } catch (error) {
+        if (error.code) {
             const response = { ...errorResponseBody };
             response.message = error.message;
-            response.err = error.err;            
+            response.err = error.err;
             return res.status(error.code).json(response);
         }
         const response = { ...errorResponseBody };

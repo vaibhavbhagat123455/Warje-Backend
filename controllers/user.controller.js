@@ -28,7 +28,7 @@ const sendOTP = async (req, res) => {
     }
 }
 
-async function changeRole(req, res) {
+const changeRole = async (req, res) => {
     const user_id = req.params.id;
 
     try {
@@ -79,24 +79,24 @@ async function changeRole(req, res) {
     }
 }
 
-async function makeUserVerified(req, res) {
+const makeUserVerified = async (req, res) => {
     const temp_user_id = req.params.id;
 
     try {
         const { data: tempUser } = await supabase
             .from("temp_users")
-            .select("name, rank, password, email_id") 
+            .select("name, rank, password, email_id")
             .eq("temp_user_id", temp_user_id)
             .single()
             .throwOnError();
 
         const { data: user } = await supabase
             .from("users")
-            .insert([{ 
-                name: tempUser.name, 
-                rank: tempUser.rank, 
-                email_id: tempUser.email_id, 
-                password: tempUser.password 
+            .insert([{
+                name: tempUser.name,
+                rank: tempUser.rank,
+                email_id: tempUser.email_id,
+                password: tempUser.password
             }])
             .select("role")
             .single()
@@ -117,15 +117,15 @@ async function makeUserVerified(req, res) {
             role: user.role
         }
 
-        const response = { ...successResponseBody }; 
+        const response = { ...successResponseBody };
         response.data = user_data;
         response.message = "User has been verified successfully.";
         return res.status(STATUS.OK).json(response);
 
     } catch (error) {
         console.error("Verification error: ", error);
-        
-        const errorResponse = { ...errorResponseBody }; 
+
+        const errorResponse = { ...errorResponseBody };
 
         if (error.code === 'PGRST116') {
             errorResponse.err = { user_id: "Temporary user not found." };
@@ -145,43 +145,75 @@ async function makeUserVerified(req, res) {
     }
 }
 
-async function getUsers(req, res) {
+const getUsers = async (req, res) => {
+    const targetUserId = req.query.id;
     try {
-        const { data: users, error: userError } = await supabase
-            .from("users")
-            .select("name, email_id");
+        let query = supabase
+            .from('users')
+            .select('user_id, name, email_id, role, rank')
 
-        if (userError) throw userError;
-
-        if (!users || users.length === 0) {
-            return res.status(404).json({ message: "No verified users found." });
+        if (targetUserId) {
+            query = query.eq('user_id', targetUserId);
         }
 
-        return res.status(200).json({ verifiedUsers: users });
+        query.eq("is_deleted", false);
+
+        const { data: users, error } = await query;
+
+        if (error) throw error;
+
+        if (targetUserId && users.length > 0) {
+            return res.status(STATUS.OK).json({
+                success: true,
+                data: users[0]
+            });
+        }
+
+        return res.status(STATUS.OK).json({
+            success: true,
+            data: users
+        });
     }
     catch (error) {
-        console.log("Verified users error: ", error)
-        res.status(500).json({ message: "Internal server error during data processing" });
+        console.log("Get Users Error:", error);
+        const response = { ...errorResponseBody };
+        response.message = "Failed to fetch users.";
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
-async function getUnverifiedUser(req, res) {
+const getUnverifiedUser = async (req, res) => {
+    const targetUserId = req.query.id;
     try {
-        const { data: users, error: userError } = await supabase
-            .from("temp_users")
-            .select("name, email_id");
+        let query = supabase
+            .from('temp_users')
+            .select('temp_user_id, name, email_id, rank')
 
-        if (userError) throw userError;
-
-        if (!users || users.length === 0) {
-            return res.status(404).json({ message: "No un-verified users found." });
+        if (targetUserId) {
+            query = query.eq('temp_user_id', targetUserId);
         }
 
-        return res.status(200).json({ unVerifiedUsers: users });
+        const { data: users, error } = await query;
+
+        if (error) throw error;
+
+        if (targetUserId && users.length > 0) {
+            return res.status(STATUS.OK).json({
+                success: true,
+                data: users[0]
+            });
+        }
+
+        return res.status(STATUS.OK).json({
+            success: true,
+            data: users
+        });
     }
     catch (error) {
-        console.log("Unverified users error: ", error)
-        res.status(500).json({ message: "Internal server error during data processing" });
+        console.log("Get Users Error:", error);
+        const response = { ...errorResponseBody };
+        response.message = "Failed to fetch users.";
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
