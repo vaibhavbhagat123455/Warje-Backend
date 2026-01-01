@@ -1,7 +1,7 @@
 import { supabase } from "../supabase.js"
 import bcrypt, { hash } from "bcryptjs"
 
-import { STATUS } from "../utils/constants.js"
+import { STATUS, USER_ROLE } from "../utils/constants.js"
 import { successResponseBody, errorResponseBody } from "../utils/responseBody.js"
 import userService from "../services/user.service.js"
 import { checkOTPExistence } from "../services/auth.service.js"
@@ -11,13 +11,13 @@ const sendOTP = async (req, res) => {
         const data = req.body;
 
         const response = await userService.sendOtpService(data);
-        
+
         return res.status(STATUS.OK).json(response);
 
     } catch (error) {
         console.log("OTP Controller Error:", error);
 
-        if(error.code) {
+        if (error.code) {
             errorResponseBody.message = error.message;
             errorResponseBody.err = error.err;
             return res.status(error.code).json(errorResponseBody)
@@ -28,132 +28,165 @@ const sendOTP = async (req, res) => {
     }
 }
 
-async function editRole(req, res) {
-	const { target_email_id, new_role } = req.body;
+async function changeRole(req, res) {
+    const user_id = req.params.id;
 
-	try {
-		if (!target_email_id || !new_role) {
-			return res.status.json({ error: "Email id and new role is required" });
-		}
+    try {
+        const { data: user, error: fetchError } = await supabase
+            .from('users')
+            .select('role')
+            .eq('user_id', user_id)
+            .single();
 
-		// Update Operation
-		const { data: updatedUsers, error } = await supabase
-			.from('users')
-			.update({
-				role: new_role
-			})
-			.eq('email_id', target_email_id)
-			.select('user_id, email_id, role');
+        if (fetchError) throw fetchError;
 
-		if (error) throw error;
+        let new_role;
+        if (user.role === USER_ROLE.ADMIN)
+            new_role = USER_ROLE.NORMAL_USER;
+        else
+            new_role = USER_ROLE.ADMIN;
 
-		// If is not updated
-		if (!updatedUsers || updatedUsers.length === 0) {
-			return res.status(404).json({ message: `Could not find a user with the email: ${target_email_id}` });
-		}
 
-		// target user updation 
-		const updatedUser = updatedUsers[0];
+        const { data: updatedUser, error: updateError } = await supabase
+            .from('users')
+            .update({ role: new_role })
+            .eq('user_id', user_id)
+            .select('email_id, role')
+            .single();
 
-		return res.status(200).json({
-			message: `Role for user ${updatedUser.email_id} successfully changed to ${updatedUser.role}.`,
-		});
+        if (updateError) throw updateError;
 
-	} catch (error) {
-		console.error('Role error', error);
-		return res.status(500).json({ message: "Internal server error during data processing" });
-	}
+        const response = { ...successResponseBody };
+        response.message = "User role updated successfully.";
+        response.data = updatedUser;
+
+        return res.status(STATUS.OK).json(response);
+
+    } catch (error) {
+        console.error('Role error', error);
+
+        const errorResponse = { ...errorResponseBody };
+
+        if (error.code === 'PGRST116') {
+            errorResponse.err = { user_id: "User not found." };
+            errorResponse.code = STATUS.NOT_FOUND;
+            errorResponse.message = "Operation Failed";
+            return res.status(STATUS.NOT_FOUND).json(errorResponse);
+        }
+
+        errorResponse.message = "Internal server error while changing role.";
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(errorResponse);
+    }
 }
 
 async function makeUserVerified(req, res) {
-	const { email_id } = req.body;
+    const temp_user_id = req.params.id;
 
-	if (!email_id) {
-		return res.status(400).json({ error: "Email id is required" });
-	}
+    try {
+        const { data: tempUser } = await supabase
+            .from("temp_users")
+            .select("name, rank, password, email_id") 
+            .eq("temp_user_id", temp_user_id)
+            .single()
+            .throwOnError();
 
-	try {
-		// To extract user name, rank, password
-		const { data: tempUser, error: tempUserError } = await supabase
-			.from("temp_users")
-			.select("name, rank, password")
-			.eq("email_id", email_id)
-			.maybeSingle();
+        const { data: user } = await supabase
+            .from("users")
+            .insert([{ 
+                name: tempUser.name, 
+                rank: tempUser.rank, 
+                email_id: tempUser.email_id, 
+                password: tempUser.password 
+            }])
+            .select("role")
+            .single()
+            .throwOnError();
 
-		if (tempUserError) throw tempUserError;
+        await supabase
+            .from("temp_users")
+            .delete()
+            .eq("temp_user_id", temp_user_id)
+            .throwOnError();
 
-		// If no entry found in db
-		if (!tempUser) {
-			return res.status(404).json({ error: "Target user not found" });
-		}
+        delete tempUser.password;
 
-		// Insert user in user
-		const { data: newUser, error: insertError } = await supabase
-			.from("users")
-			.insert([{ name: tempUser.name, rank: tempUser.rank, email_id, password: tempUser.password }]);
-
-		if (insertError) {
-             // 409 Conflict: If user already exists (e.g., race condition or re-verification)
-            if (insertError.code === '23505') { 
-                await supabase.from("temp_users").delete().eq("email_id", email_id);
-                return res.status(409).json({ error: "User is already verified. Cleaning up unverified record." });
-            }
-            throw insertError;
+        const user_data = {
+            name: tempUser.name,
+            email_id: tempUser.email_id,
+            rank: tempUser.rank,
+            role: user.role
         }
 
-		// delete entry from temp_users (Now user is verified)
-		await supabase.from("temp_users").delete().eq("email_id", email_id);
+        const response = { ...successResponseBody }; 
+        response.data = user_data;
+        response.message = "User has been verified successfully.";
+        return res.status(STATUS.OK).json(response);
 
-		return res.status(200).json({ message: "User is now verified" });
-	}
-	catch (error) {
-		console.error("Verification error: ", error)
-		res.status(500).json({ message: "Internal server error during data processing" });
-	}
+    } catch (error) {
+        console.error("Verification error: ", error);
+        
+        const errorResponse = { ...errorResponseBody }; 
+
+        if (error.code === 'PGRST116') {
+            errorResponse.err = { user_id: "Temporary user not found." };
+            errorResponse.code = STATUS.NOT_FOUND;
+            errorResponse.message = "Verification Failed";
+            return res.status(STATUS.NOT_FOUND).json(errorResponse);
+        }
+
+        if (error.code === '23505') {
+            errorResponse.err = { email_id: "This user is already verified." };
+            errorResponse.message = "Duplicate Entry";
+            return res.status(STATUS.CONFLICT).json(errorResponse);
+        }
+
+        errorResponse.message = "Internal server error during verification.";
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(errorResponse);
+    }
 }
 
 async function getUsers(req, res) {
-	try {
-		const { data: users, error: userError } = await supabase
-			.from("users")
-			.select("name, email_id");
+    try {
+        const { data: users, error: userError } = await supabase
+            .from("users")
+            .select("name, email_id");
 
-		if (userError) throw userError;
+        if (userError) throw userError;
 
-		if (!users || users.length === 0) {
-			return res.status(404).json({ message: "No verified users found." });
-		}
+        if (!users || users.length === 0) {
+            return res.status(404).json({ message: "No verified users found." });
+        }
 
-		return res.status(200).json({ verifiedUsers: users });
-	}
-	catch (error) {
-		console.log("Verified users error: ", error)
-		res.status(500).json({ message: "Internal server error during data processing" });
-	}
+        return res.status(200).json({ verifiedUsers: users });
+    }
+    catch (error) {
+        console.log("Verified users error: ", error)
+        res.status(500).json({ message: "Internal server error during data processing" });
+    }
 }
 
 async function getUnverifiedUser(req, res) {
-	try {
-		const { data: users, error: userError } = await supabase
-			.from("temp_users")
-			.select("name, email_id");
+    try {
+        const { data: users, error: userError } = await supabase
+            .from("temp_users")
+            .select("name, email_id");
 
-		if (userError) throw userError;
+        if (userError) throw userError;
 
-		if (!users || users.length === 0) {
-			return res.status(404).json({ message: "No un-verified users found." });
-		}
+        if (!users || users.length === 0) {
+            return res.status(404).json({ message: "No un-verified users found." });
+        }
 
-		return res.status(200).json({ unVerifiedUsers: users });
-	}
-	catch (error) {
-		console.log("Unverified users error: ", error)
-		res.status(500).json({ message: "Internal server error during data processing" });
-	}
+        return res.status(200).json({ unVerifiedUsers: users });
+    }
+    catch (error) {
+        console.log("Unverified users error: ", error)
+        res.status(500).json({ message: "Internal server error during data processing" });
+    }
 }
 
-const updateUser = async(req, res) => {
-    try {        
+const updateUser = async (req, res) => {
+    try {
         const data = req.body;
         const user_id = req.params.id;
 
@@ -167,8 +200,8 @@ const updateUser = async(req, res) => {
     } catch (error) {
         console.error("Update user Controller Error:", error);
 
-        if(error.code) {
-           return res.status(error.code).json(error);
+        if (error.code) {
+            return res.status(error.code).json(error);
         }
 
         return res.status(STATUS.INTERNAL_SERVER_ERROR).json({
@@ -181,24 +214,24 @@ const updateUser = async(req, res) => {
 const resetPassword = async (req, res) => {
     try {
         const { email_id, code, password } = req.body;
-    
+
         await checkOTPExistence({ email_id, code });
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const { data: updatedUser } = await supabase
-                .from("users")
-                .update({ password: hashedPassword })
-                .eq("email_id", email_id)
-                .select("user_id, email_id")
-                .single()
-                .throwOnError();
+            .from("users")
+            .update({ password: hashedPassword })
+            .eq("email_id", email_id)
+            .select("user_id, email_id")
+            .single()
+            .throwOnError();
 
         successResponseBody.message = "Password reset successfully. You can now login.";
         successResponseBody.data = { email_id: updatedUser.email_id };
-        
-        return res.status(STATUS.OK).json(successResponseBody); 
-    } catch(error) {
+
+        return res.status(STATUS.OK).json(successResponseBody);
+    } catch (error) {
         console.error("Reset Password Controller Error:", error);
 
         if (error.code === 'PGRST116') {
@@ -214,8 +247,8 @@ const resetPassword = async (req, res) => {
                 return res.status(STATUS.UNPROCESSABLE_ENTITY.code).json(errorResponseBody);
             }
         }
-        
-        if(error.code) {
+
+        if (error.code) {
             errorResponseBody.err = error.err;
             errorResponseBody.message = error.message;
             return res.status(error.code).json(errorResponseBody);
@@ -230,24 +263,24 @@ const deleteUser = async (req, res) => {
     try {
         const user_id = req.params.id;
 
-        const {  } = await supabase
+        const { } = await supabase
             .from("users")
-            .update({ is_deleted: true, deleted_at: new Date().toISOString() }) 
+            .update({ is_deleted: true, deleted_at: new Date().toISOString() })
             .eq("user_id", user_id)
-			.throwOnError();
-		
-		const response = { ...successResponseBody };
+            .throwOnError();
+
+        const response = { ...successResponseBody };
         response.message = "User account deactivated successfully.";
-        
+
         return res.status(STATUS.OK).json(response);
 
     } catch (error) {
         console.error("Delete User Error:", error);
-		
-		if (error.code === 'PGRST116') {
-			errorResponseBody.err = { email_id: "User not found. Please sign up." };
-			errorResponseBody.message = "Authentication Failed";
-			return res.status(STATUS.NOT_FOUND).json(errorResponseBody);
+
+        if (error.code === 'PGRST116') {
+            errorResponseBody.err = { email_id: "User not found. Please sign up." };
+            errorResponseBody.message = "Authentication Failed";
+            return res.status(STATUS.NOT_FOUND).json(errorResponseBody);
         }
 
         errorResponseBody.message = "Internal server error during user deletion.";
@@ -259,24 +292,24 @@ const updateIsDeleted = async (req, res) => {
     try {
         const user_id = req.params.id;
 
-        const {  } = await supabase
+        const { } = await supabase
             .from("users")
-            .update({ is_deleted: false, deleted_at: null }) 
+            .update({ is_deleted: false, deleted_at: null })
             .eq("user_id", user_id)
-			.throwOnError();
-		
-		const response = { ...successResponseBody };
+            .throwOnError();
+
+        const response = { ...successResponseBody };
         response.message = "User account activated successfully.";
-        
+
         return res.status(STATUS.OK).json(response);
 
     } catch (error) {
         console.error("UpdateisDelete User Error:", error);
-		
-		if (error.code === 'PGRST116') {
-			errorResponseBody.err = { email_id: "User not found. Please sign up." };
-			errorResponseBody.message = "Authentication Failed";
-			return res.status(STATUS.NOT_FOUND).json(errorResponseBody);
+
+        if (error.code === 'PGRST116') {
+            errorResponseBody.err = { email_id: "User not found. Please sign up." };
+            errorResponseBody.message = "Authentication Failed";
+            return res.status(STATUS.NOT_FOUND).json(errorResponseBody);
         }
 
         errorResponseBody.message = "Internal server error during user deletion.";
@@ -285,13 +318,13 @@ const updateIsDeleted = async (req, res) => {
 };
 
 export default {
-	sendOTP,
-	editRole,
-	makeUserVerified,
-	getUsers,
-	getUnverifiedUser,
-	updateUser,
-	deleteUser,
+    sendOTP,
+    changeRole,
+    makeUserVerified,
+    getUsers,
+    getUnverifiedUser,
+    updateUser,
+    deleteUser,
     resetPassword,
-	updateIsDeleted
+    updateIsDeleted
 };

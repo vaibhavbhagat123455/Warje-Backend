@@ -1,6 +1,5 @@
 import express from "express"
 
-import userController from "../controllers/user.controller.js"
 import authInterceptor from "../interceptors/auth.interceptor.js";
 import authController from "../controllers/auth.controller.js";
 
@@ -18,7 +17,6 @@ router.post("/signup",
 );
 
 router.post("/signin", 
-    // authInterceptor.checkUserNotExists,
     authInterceptor.validateSignInRequest, 
     authController.signin
 );

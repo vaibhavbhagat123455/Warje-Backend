@@ -12,7 +12,7 @@ export const checkOTPExistence = async(data) => {
             .eq("email_id", data.email_id) 
             .single()             
             .throwOnError();
-
+            
         if (String(responseFromOtp.code) !== String(data.code)) {
             throw {
                 err: { otp: "Invalid verification code." },
@@ -167,6 +167,7 @@ const signinUser = async (data) => {
         });
 
         delete user.password;
+        delete user.is_deleted;
         user["token"] = token;
 
         console.log(user);
