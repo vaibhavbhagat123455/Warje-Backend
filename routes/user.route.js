@@ -9,13 +9,13 @@ const router = express.Router()
 
 router.post(
     "/send-otp", 
-    // userIntercetor.isNotTempUser,
     userIntercetor.validateOtpReq, 
     userController.sendOTP
 ); 
 
 router.patch(
     "/reset", 
+    validateStrictBody(["email_id, password, code"]),
     userIntercetor.validateResetPass, 
     userController.resetPassword
 );
@@ -70,5 +70,6 @@ router.get(
     userIntercetor.validateGetUnverifiedUsers, 
     userController.getUnverifiedUser
 )
+
 
 export default router

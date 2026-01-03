@@ -1,216 +1,310 @@
 import validator from "validator";
 import { supabase } from "../supabase.js"
+import { CASE_PRIORITY, CASE_STATUS, STATUS, UUIDCASE } from "../utils/constants.js";
+import { isAdmin, isUser } from "./user.interceptor.js";
+import { errorResponseBody } from "../utils/responseBody.js";
 
-const ALLOWED_PRIORITIES = ["Low", "Medium", "High"];
-const ADMIN_ROLE_ID = 2;
+const validatePriority = (req, res, next) => {
+    const { priority } = req.body;
 
-async function validateNewCase(req, res, next) {
-    const currentUser = req.user;
-    const {
-        case_number,
-        title,
-        priority,
-        deadline,
-        section_under_ipc,
-        assigned_officer_emails
-    } = req.body;
-
-    if (!case_number || !title || !priority || !Array.isArray(assigned_officer_emails) || !section_under_ipc) {
-        return res.status(400).json({
-            error: "Missing required fields.",
-            details: "Required fields: case_number, title, priority, section_under_ipc, and assigned_officer_emails (must be an array)."
-        });
-    }
-
-    if (!ALLOWED_PRIORITIES.includes(priority)) {
+    if (!Object.values(CASE_PRIORITY).includes(priority)) {
         return res.status(400).json({
             error: "Invalid Field Value",
-            message: `Invalid priority value. Must be one of: ${ALLOWED_PRIORITIES.join(', ')}.`
+            message: `Invalid priority. Must be one of: ${Object.values(CASE_PRIORITY).join(', ')}.`
         });
     }
+    next();
+};
+
+const validateDeadline = (req, res, next) => {
+    const { deadline } = req.body;
 
     if (deadline && isNaN(Date.parse(deadline))) {
-        return res.status(400).json({
+        return res.status(STATUS.BAD_REQUEST).json({
             error: "Invalid Field Format",
-            message: "Invalid date format for deadline. Use YYYY-MM-DD or a recognized date string."
+            message: "Invalid date format for deadline. Use YYYY-MM-DD."
+        });
+    }
+    next();
+};
+
+const validateOfficerEmails = (req, res, next) => {
+    const { assigned_officer_emails } = req.body;
+
+    if (!Array.isArray(assigned_officer_emails)) {
+        return res.status(STATUS.BAD_REQUEST).json({
+            error: "Invalid Format",
+            message: "assigned_officer_emails must be an array."
         });
     }
 
-    // Invalid email
-    if (assigned_officer_emails.length > 0) {
-        const invalidEmails = assigned_officer_emails.filter(email =>
-            typeof email !== 'string' || !validator.isEmail(email)
-        );
+    if (assigned_officer_emails.length === 0) {
+        return res.status(STATUS.BAD_REQUEST).json({
+            error: "Missing Data",
+            message: "At least one officer email is required."
+        });
+    }
 
-        if (invalidEmails.length > 0) {
-            return res.status(400).json({
-                error: "Invalid Field Format",
-                message: "One or more provided emails are invalid.",
-                invalid_emails: invalidEmails
-            });
-        }
+    const invalidEmails = assigned_officer_emails.filter(email =>
+        typeof email !== 'string' || !validator.isEmail(email)
+    );
+
+    if (invalidEmails.length > 0) {
+        return res.status(STATUS.BAD_REQUEST).json({
+            error: "Invalid Field Format",
+            message: "One or more provided emails are invalid.",
+            invalid_emails: invalidEmails
+        });
+    }
+
+    next();
+};
+
+const validateCaseNumber = (req, res, next) => {
+    const { case_number } = req.body;
+
+    if (!case_number) {
+        return res.status(STATUS.BAD_REQUEST).json({
+            error: "Missing Required Field",
+            message: "case_number is required."
+        });
+    }
+
+    if (typeof case_number !== 'string' || case_number.trim().length === 0) {
+        return res.status(STATUS.BAD_REQUEST).json({
+            error: "Invalid Format",
+            message: "case_number must be a valid non-empty string."
+        });
+    }
+
+    next();
+};
+
+const validateTitle = (req, res, next) => {
+    const { title } = req.body;
+
+    if (!title) {
+        return res.status(STATUS.BAD_REQUEST).json({
+            error: "Missing Required Field",
+            message: "title is required."
+        });
+    }
+
+    if (typeof title !== 'string' || (title.trim().length < 2 && title.trim().length > 20)) {
+        return res.status(STATUS.BAD_REQUEST).json({
+            error: "Invalid Format",
+            message: "title must be 2 characters long."
+        });
+    }
+
+    next();
+};
+
+const validateSectionIPC = (req, res, next) => {
+    const { section_under_ipc } = req.body;
+
+    if (!section_under_ipc) {
+        return res.status(STATUS.BAD_REQUEST).json({
+            error: "Missing Required Field",
+            message: "section_under_ipc is required."
+        });
+    }
+
+    // Ensure it's not just whitespace
+    if (typeof section_under_ipc !== 'string' || section_under_ipc.trim().length === 0) {
+        return res.status(STATUS.BAD_REQUEST).json({
+            error: "Invalid Format",
+            message: "section_under_ipc must be a valid string."
+        });
+    }
+
+    next();
+};
+
+const validateCase = [
+    validateCaseNumber,
+    validateTitle,
+    validateSectionIPC,
+    validatePriority,
+    validateDeadline,
+    validateOfficerEmails,
+];
+
+const validateTotalCaseCount = async (req, res, next) => {
+    const officerId = req.params.user_id;
+
+    if (!officerId || !UUIDCASE.CASE.test(officerId)) {
+        const response = { ...errorResponseBody };
+
+        response.message = "Validation Failed";
+        response.err = {
+            user_id: "Invalid officer ID provided. The ID must be a valid UUID format."
+        };
+
+        return res.status(400).json(response);
     }
 
     try {
-        // Check if the current user is an administrator
-        const { data: user, error: userError } = await supabase
-            .from("users")
-            .select("role")
-            .eq("user_id", currentUser.user_id)
-            .maybeSingle();
-
-        if (userError) throw userError;
-
-        // if user is not present in db
-        if (!user) {
-            return res.status(404).json({ error: "User not found" });
-        }
-
+        await isUser({ user_id: officerId });
         next();
-    }
-    catch (error) {
-        console.error("New Case Validation Error: ", error)
-        return res.status(500).json({ error: "Internal server error during data processing" });
+    } catch (error) {
+        if (error.code) {
+            const response = { ...errorResponseBody };
+            response.message = error.message;
+            response.err = error.err;
+            return res.status(error.code).json(response);
+        }
+        const response = { ...errorResponseBody };
+        response.message = "Something went wrong";
+        response.err = { details: error.message };
+
+        return res.status(500).json(response);
     }
 }
 
-async function validateTotalCaseCount(req, res, next) {
+const validateGetOfficersCasesCount = async (req, res, next) => {
     const currentUser = req.user;
-    const officerId = req.params.user_id;
+    const officerId = req.query.user_id;
+    const status = req.query.status;
 
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!currentUser.user_id || !UUIDCASE.CASE.test(currentUser.user_id)) {
+        const response = { ...errorResponseBody };
+        response.message = "Validation Failed";
+        response.err = { auth: "Invalid current user session." };
+        return res.status(STATUS.BAD_REQUEST).json(response);
+    }
 
-    if (!officerId || !uuidRegex.test(officerId)) {
-        return res.status(400).json({ error: "Invalid officer ID format. Must be a valid UUID." });
+    if (officerId && !UUIDCASE.CASE.test(officerId)) {
+        const response = { ...errorResponseBody };
+        response.message = "Validation Failed";
+        response.err = { user_id: "Invalid officer ID format." };
+        return res.status(STATUS.BAD_REQUEST).json(response);
+    }
+
+    if (status) {
+        const validStatuses = Object.values(CASE_STATUS);
+
+        if (!validStatuses.includes(status)) {
+            const response = { ...errorResponseBody };
+            response.message = "Validation Failed";
+            response.err = {
+                status: `Invalid status. Allowed: ${validStatuses.join(', ')}`
+            };
+            return res.status(STATUS.BAD_REQUEST).json(response);
+        }
     }
 
     try {
-        const { data: user, error: userError } = await supabase
-            .from("users")
-            .select("role")
-            .eq("user_id", currentUser.user_id)
-            .maybeSingle();
-
-        if (userError) throw userError;
-
-        //  user not found
-        if (!user) {
-            return res.status(404).json({ error: "User not found" });
-        }
-
+        await isAdmin({ user_id: currentUser.user_id });
+        if (officerId) await isUser({ user_id: officerId });
         next();
     }
     catch (error) {
-        console.error("Get total cases count validation error ", error)
-        return res.status(500).json({ error: "Internal server error during data processing" });
+        if (error.code) {
+            const response = { ...errorResponseBody };
+            response.message = error.message;
+            response.err = error.err;
+            return res.status(error.code).json(response);
+        }
+        const response = { ...errorResponseBody };
+        response.message = "Something went wrong";
+        response.err = { details: error.message };
+
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
-async function validateGetOfficersCasesCount(req, res, next) {
-    const currentUser = req.user;
+const validateGetCaseId = async (req, res, next) => {
+    const officerId = req.params.user_id;
+
+    if (!officerId || !UUIDCASE.CASE.test(officerId)) {
+        const response = { ...errorResponseBody };
+
+        response.message = "Validation Failed";
+        response.err = {
+            user_id: "Invalid officer ID provided. The ID must be a valid UUID format."
+        };
+
+        return res.status(STATUS.BAD_REQUEST).json(response);
+    }
 
     try {
-        const { data: user, error: userError } = await supabase
-            .from("users")
-            .select("role")
-            .eq("user_id", currentUser.user_id)
-            .maybeSingle();
-
-        if (userError) throw userError;
-
-        if (!user || user.role !== ADMIN_ROLE_ID) {
-            return res.status(403).json({ error: "Access Forbidden: Only Administrators can edit roles." });
-        }
-
+        await isUser({ user_id: officerId });
         next();
-    }
-    catch (error) {
-        console.error("Get Users case count validation error: ", error);
-        return res.status(500).json({ error: "Internal server error during data processing" });
+    } catch (error) {
+        if (error.code) {
+            const response = { ...errorResponseBody };
+            response.message = error.message;
+            response.err = error.err;
+            return res.status(error.code).json(response);
+        }
+        const response = { ...errorResponseBody };
+        response.message = "Something went wrong";
+        response.err = { details: error.message };
+
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
-async function validategetActiveCaseCount(req, res, next) {
-    const officerId = req.params.user_id;
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-    if (!officerId || !uuidRegex.test(officerId)) {
-        return res.status(400).json({ error: "Invalid officer ID format. Must be a valid UUID" });
-    }
-
-    next();
-}
-
-async function validategetCompletedCaseCount(req, res, next) {
-    const officerId = req.params.user_id;
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-    if (!officerId || !uuidRegex.test(officerId)) {
-        return res.status(400).json({ error: "Invalid officer ID format. Must be a valid UUID" });
-    }
-
-    next();
-}
-
-async function validateGetCaseId(req, res, next) {
-    const officerId = req.params.user_id;
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-    if (!officerId || !uuidRegex.test(officerId)) {
-        return res.status(400).json({ error: "Invalid officer ID format. Must be a valid UUID" });
-    }
-
-    next();
-}
-
-async function validateGetCaseEmailId(req, res, next) {
+const validateGetCaseEmailId = async (req, res, next) => {
     const currentUser = req.user;
     const { email_id } = req.body;
 
     if (!email_id) {
-        return res.status(400).json({ error: "Missing Email Id" });
+        const response = { ...errorResponseBody };
+        response.message = "Validation Failed";
+        response.err = {
+            email_id: "Email ID is missing from the request body."
+        };
+        return res.status(400).json(response);
     }
 
     if (!validator.isEmail(email_id)) {
-        return res.status(400).json({ error: 'Invalid email format.' });
+        const response = { ...errorResponseBody };
+        response.message = "Validation Failed";
+        response.err = {
+            email_id: "Invalid email format provided."
+        };
+        return res.status(400).json(response);
     }
 
     try {
-        const { data: user, error: userError } = await supabase
-            .from("users")
-            .select("role")
-            .eq("user_id", currentUser.user_id)
-            .maybeSingle();
-
-        if (userError) throw existingUserError;
-
-        if(!user) {
-            return res.status(404).json({ error: "No user found" });
-        }
-
-        if(user.role !== ADMIN_ROLE_ID) {
-            return res.status(400).json({ error: "Access Forbidden: Only Administrators can edit roles." })
-        }
+        await isAdmin({ user_id: currentUser.user_id });
 
         next();
     }
-    catch(error) {
-        console.error("Validate case Email Id Error: ", error);
-        return res.status(500).json({ error: "Internal server error during data processing" })
+    catch (error) {
+        console.error("Validate Case Email ID Error: ", error);
+
+        if (error.code) {
+            const response = { ...errorResponseBody };
+            response.message = error.message;
+            response.err = error.err || {};
+            return res.status(error.code).json(response);
+        }
+
+        const response = { ...errorResponseBody };
+        response.message = "Internal Server Error";
+        response.err = {
+            details: error.message || "An unexpected error occurred during validation."
+        };
+
+        return res.status(500).json(response);
     }
 }
 
-const validateCaseUpdate = async(req, res, next) => {
+const validateCaseUpdate = async (req, res, next) => {
     const { case_number, title, status, priority, deadline, section_under_ipc } = req.body;
 
     if (!case_number) {
-        return res.status(400).json({ error: "Case number is required for update." });
+        const response = { ...errorResponseBody };
+        response.message = "Validation Failed";
+        response.err = {
+            case_number: "Case number is required to perform an update."
+        };
+        return res.status(STATUS.BAD_REQUEST).json(response);
     }
 
-    // 2. Sanitization: Build the updates object with ONLY allowed fields
     const updates = {};
     if (title) updates.title = title;
     if (status) updates.status = status;
@@ -218,78 +312,96 @@ const validateCaseUpdate = async(req, res, next) => {
     if (deadline) updates.deadline = deadline;
     if (section_under_ipc) updates.section_under_ipc = section_under_ipc;
 
-    // 3. Validation: Ensure there is actually something to update
     if (Object.keys(updates).length === 0) {
-        return res.status(400).json({ error: "No fields provided for update." });
+        const response = { ...errorResponseBody };
+        response.message = "Validation Failed";
+        response.err = {
+            details: "No valid fields provided for update. Please provide at least one field (title, status, priority, deadline, or section_under_ipc)."
+        };
+        return res.status(STATUS.BAD_REQUEST).json(response);
+    }
+
+    req.validCaseUpdates = updates;
+    req.targetCaseNumber = case_number;
+
+    next();
+};
+
+const validateCaseDeletion = async (req, res, next) => {
+    const case_number = req.params.case_number;
+
+    if (!case_number) {
+        const response = { ...errorResponseBody };
+        response.message = "Validation Failed";
+        response.err = { 
+            case_number: "Case Number parameter is missing." 
+        };
+        return res.status(STATUS.BAD_REQUEST).json(response);
     }
 
     try {
-        const { data: cases, error: caseError } = await supabase
+        const { data: existingCase, error } = await supabase
             .from("cases")
             .select("case_id")
             .eq("case_number", case_number)
             .maybeSingle();
 
-        if (caseError) throw caseError;
+        if (error) throw error;
 
-        // case not found in db
-        if (!cases) {
-            return res.status(404).json({ error: "Cases not found." });
+        if (!existingCase) {
+            const response = { ...errorResponseBody };
+            response.message = "Deletion Failed";
+            response.err = { 
+                case_number: `Case with number '${case_number}' not found.` 
+            };
+            return res.status(STATUS.NOT_FOUND).json(response);
         }
 
-        // 4. Attach validated data to the request object
-        req.validCaseId = cases.case_id;
-        req.validCaseUpdates = updates;
+        req.validCaseId = existingCase.case_id;
 
         next();
-    }
-    catch(error) {
-        console.error("Validate case update Error: ", error);
-        return res.status(500).json({ error: "Internal server error during data processing" })
+
+    } catch (error) {
+        console.error("Validate Case Deletion Error:", error);
+
+        const response = { ...errorResponseBody };
+        response.message = "Internal Server Error";
+        response.err = { details: error.message };
+
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 };
 
-const validateCaseDeletion = async(req, res, next) => {
-    const { case_number } = req.body;
-
-    // 1. Validation: Ensure ID is provided
-    if (!case_number) {
-        return res.status(400).json({ error: "Case ID is required for deletion." });
-    }
+const validateGetCase = async (req, res, next) => {
+    const currentUser = req.user;
+    const caseNumber = req.query.case_number; 
 
     try {
-        const { data: cases, error: caseError } = await supabase
-        .from("cases")
-        .select("case_id")
-        .eq("case_number", case_number)
-        .maybeSingle();
-
-        
-        if (caseError) throw caseError;
-        
-        // user not found in db
-        if (!cases) {
-            return res.status(404).json({ error: "Cases not found." });
+        await isAdmin({ user_id: currentUser.user_id });
+    } catch (error) {
+        if (error.code) {
+            const response = { ...errorResponseBody };
+            response.message = error.message;
+            response.err = error.err || {};
+            return res.status(error.code).json(response);
         }
-        
-        // 2. Attach validated ID to request
-        req.validCaseId = cases.case_id;
-        next();
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json({ ...errorResponseBody, message: "Auth Error" });
     }
-    catch(error) {
-        console.error("Validate case deletion Error: ", error);
-        return res.status(500).json({ error: "Internal server error during data processing" })
+
+    if (caseNumber) {
+        req.targetCaseNumber = caseNumber;
     }
+
+    next();
 };
 
 export default {
-    validateNewCase,
+    validateCase,
     validateTotalCaseCount,
     validateGetOfficersCasesCount,
-    validategetActiveCaseCount,
-    validategetCompletedCaseCount,
     validateGetCaseId,
     validateGetCaseEmailId,
     validateCaseUpdate,
-    validateCaseDeletion
+    validateCaseDeletion,
+    validateGetCase
 };

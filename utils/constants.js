@@ -44,3 +44,7 @@ export const OTP_PURPOSE = {
 export const REGEX = {
     EMAIL: /^[A-Za-z0-9._+%-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
 }
+
+export const UUIDCASE = {
+    CASE: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+}

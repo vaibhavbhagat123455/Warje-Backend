@@ -4,6 +4,52 @@ import { STATUS, REGEX, USER_RANK, USER_ROLE } from '../utils/constants.js';
 import { errorResponseBody } from "../utils/responseBody.js";
 import { validateCode, validateEmail, validatePassword, validateStrictBody, validateName } from "./auth.interceptor.js";
 
+export const isUser = async (data) => {
+    try {
+        const email = data.email_id;
+        const userId = data.user_id;
+
+        let query = supabase.from("users").select("user_id");
+
+        if (email) {
+            query = query.eq("email_id", email);
+        } else if (userId) {
+            query = query.eq("user_id", userId);
+        } else {
+            throw {
+                message: "Validation Error",
+                err: { details: "No email_id or user_id provided to check user existence." },
+                code: STATUS.NOT_FOUND
+            }
+        }
+
+        const { data: user, error } = await query.maybeSingle();
+
+        if (error) throw error;
+
+        if (!user) {
+            throw {
+                message: "User Not Found",
+                err: { "user_id": "The user with the provided credentials does not exist in our records." },
+                code: STATUS.NOT_FOUND
+            }
+        }
+
+        return true;
+
+    } catch (error) {
+        console.error("isUser Middleware Error:", error);
+        if (error.code) {
+            throw error;
+        }
+
+        throw {
+            message: "Internal Server Error",
+            err: { details: error.message },
+            code: STATUS.INTERNAL_SERVER_ERROR
+        }
+    }
+};
 
 const validateOtpReq = (req, res, next) => {
     const { purpose } = req.body;
@@ -288,7 +334,7 @@ const isNotTempUser = async (data) => {
     }
 }
 
-const isAdmin = async (data) => {
+export const isAdmin = async (data) => {
     try {
         const { user_id } = data;
 

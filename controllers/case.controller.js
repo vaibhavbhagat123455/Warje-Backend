@@ -1,27 +1,26 @@
 import { supabase } from "../supabase.js"
+import { STATUS } from "../utils/constants.js";
+import { errorResponseBody, successResponseBody } from "../utils/responseBody.js";
 
-async function createNewCase(req, res) {
+const createCase = async (req, res) => {
     try {
-        const {
-            case_number,
-            title,
-            priority,
-            deadline,
-            section_under_ipc,
-            assigned_officer_emails
-        } = req.body;
+        const { case_number, title, priority, assigned_officer_emails, section_under_ipc, deadline } = req.body;
 
-        if (!case_number || !title || !priority || !Array.isArray(assigned_officer_emails) || !section_under_ipc) {
-            return res.status(400).json({
-                error: "Missing required fields.",
-                details: "Required fields: case_number, title, priority, section_under_ipc, and assigned_officer_emails (must be an array)."
-            });
+        // --- VALIDATION STEP ---
+        if (!case_number || !title || !priority || !section_under_ipc || !Array.isArray(assigned_officer_emails)) {
+            // CLONE the template first to avoid bugs
+            const response = { ...errorResponseBody };
+            response.message = "Validation Failed";
+            response.err = {
+                details: "Missing required fields: case_number, title, priority, section_under_ipc, and assigned_officer_emails."
+            };
+            return res.status(400).json(response);
         }
 
         let officerIds = [];
 
-        if (assigned_officer_emails && assigned_officer_emails.length > 0) {
-            // Standardize emails (lowercase and trim) for accurate database lookup
+        // --- OFFICER LOOKUP STEP ---
+        if (assigned_officer_emails.length > 0) {
             const cleanEmails = assigned_officer_emails.map(email => email.toLowerCase().trim());
 
             const { data: officers, error: lookupError } = await supabase
@@ -31,29 +30,30 @@ async function createNewCase(req, res) {
 
             if (lookupError) throw lookupError;
 
-            // If the number of found officers doesn't match the number of emails provided, some are missing.
+            // Check if any officers are missing
             if (!officers || officers.length !== cleanEmails.length) {
+                const foundEmails = new Set(officers.map(o => o.email_id));
+                const missingEmails = cleanEmails.filter(email => !foundEmails.has(email));
 
-                // Identify which emails were not found in the 'users' table
-                const foundVerifiedEmails = new Set(officers.map(o => o.email_id));
-                const missingOrUnverifiedEmails = cleanEmails.filter(email => !foundVerifiedEmails.has(email));
-
-                return res.status(404).json({
-                    message: "One or more assigned officers not found or are not verified.",
-                    missing_or_unverified_officers: missingOrUnverifiedEmails
-                });
+                const response = { ...errorResponseBody };
+                response.message = "Officer Verification Failed";
+                response.err = {
+                    details: "One or more assigned officers are not registered in the system.",
+                    missing_officers: missingEmails
+                };
+                return res.status(404).json(response);
             }
 
-            // Extract the user_ids from the found officer objects
             officerIds = officers.map(officer => officer.user_id);
         }
+
+        // --- CASE CREATION STEP ---
         const newCaseData = {
             case_number: case_number.trim(),
             title: title.trim(),
             priority,
-            // Conditionally include deadline if it was provided
+            section_under_ipc,
             ...(deadline && { deadline }),
-            ...(section_under_ipc && { section_under_ipc }),
         };
 
         const { data: insertedCase, error: insertError } = await supabase
@@ -63,309 +63,461 @@ async function createNewCase(req, res) {
             .single();
 
         if (insertError) {
+            // Handle duplicate case number
             if (insertError.code === '23505') {
-                return res.status(409).json({ message: "Case Number already exists." });
+                const response = { ...errorResponseBody };
+                response.message = "Case Creation Failed";
+                response.err = {
+                    field: "case_number",
+                    message: `Case Number '${case_number}' already exists.`
+                };
+                return res.status(409).json(response);
             }
-            throw error;
+            throw insertError;
         }
 
         const newCaseId = insertedCase.case_id;
 
+        // --- ASSIGNMENT STEP ---
         if (officerIds.length > 0) {
             const joinRecords = officerIds.map(userId => ({
                 case_id: newCaseId,
                 user_id: userId,
             }));
 
-            // Batch insert the assignment records
             const { error: joinError } = await supabase
                 .from("case_users")
                 .insert(joinRecords);
 
-            if (joinError) {
-                console.error("Error creating join records:", joinError);
-                throw joinError;
-            }
+            if (joinError) throw joinError;
         }
+        const response = { ...successResponseBody };
+        response.message = "New case created and officers assigned successfully.";
+        response.data = {
+            case_id: newCaseId,
+            case_number: newCaseData.case_number
+        };
 
-        res.status(201).json({ message: "New case created and officers assigned successfully.", });
+        return res.status(201).json(response);
 
     } catch (error) {
-        console.error("New Case Error: ", error)
-        return res.status(500).json({ error: "Internal server error during data processing" });
+        console.error("Create Case Error:", error);
+
+        const response = { ...errorResponseBody };
+        response.message = "Internal Server Error";
+        response.err = {
+            details: error.message || "An unexpected error occurred."
+        };
+
+        return res.status(500).json(response);
     }
 }
 
-async function getTotalCaseCount(req, res) {
+const getTotalCaseCount = async (req, res) => {
     try {
         const officerId = req.params.user_id;
 
-        // query to count specific user case
         const { count, error } = await supabase
             .from('case_users')
-            .select('user_id', { count: 'exact', head: true })
+            .select('*', { count: 'exact', head: true })
             .eq('user_id', officerId);
 
-
         if (error) throw error;
 
-        res.status(200).json({ total_cases_assigned: count || 0 });
-    }
-    catch (error) {
+        const response = { ...successResponseBody };
+
+        response.message = "Total assigned cases count retrieved successfully.";
+        response.data = {
+            total_cases_assigned: count || 0
+        };
+
+        return res.status(STATUS.OK).json(response);
+
+    } catch (error) {
         console.error("Get total cases count error:", error);
-        res.status(500).json({ error: "Internal server error during data processing" });
+
+        const response = { ...errorResponseBody };
+
+        response.message = "Internal Server Error";
+        response.err = {
+            details: error.message || "An unexpected error occurred while fetching the case count."
+        };
+
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
-async function getOfficersCaseCount(req, res) {
+const getOfficersCaseCount = async (req, res) => {
+    const officerId = req.query.user_id;
+    const status = req.query.status;
+
     try {
-        const { data, error } = await supabase
-            .from('users')
-            .select('name, case_users!inner(count)');
+        // ==================================================
+        // SCENARIO 1: No ID -> LIST ALL OFFICERS
+        // ==================================================
+        if (!officerId) {
+
+            // 1. Fetch Users AND their Cases (with status)
+            const { data, error } = await supabase
+                .from('users')
+                .select(`
+                    name, 
+                    case_users (
+                        cases (
+                            status
+                        )
+                    )
+                `)
+                .eq('is_deleted', false);
+
+            if (error) throw error;
+
+            const cleanerData = data.map(user => {
+                const allAssignedCases = user.case_users || [];
+
+                let validCases = allAssignedCases;
+
+                if (status) {
+                    validCases = allAssignedCases.filter(item =>
+                        item.cases && item.cases.status === status
+                    );
+                }
+
+                return {
+                    name: user.name,
+                    count: validCases.length // We count the array length here
+                };
+            });
+
+            const response = { ...successResponseBody };
+            response.message = status
+                ? `Officers' ${status} case counts retrieved.`
+                : "All officers' total case counts retrieved.";
+            response.data = cleanerData;
+
+            return res.status(STATUS.OK).json(response);
+        }
+
+        // ==================================================
+        // SCENARIO 2: ID Provided -> SPECIFIC OFFICER STATS
+        // ==================================================
+
+        let query = supabase
+            .from('case_users')
+            .select(
+                `case_id, cases!inner ( status )`,
+                { count: 'exact', head: true }
+            )
+            .eq('user_id', officerId);
+
+        if (status) {
+            query = query.eq('cases.status', status);
+        }
+
+        const { count, error } = await query;
 
         if (error) throw error;
 
-        const cleanerData = data.map(user => ({
-            name: user.name,
-            count: user.case_users?.[0]?.count || 0
-        }));
+        const response = { ...successResponseBody };
+        response.message = status
+            ? `Officer's ${status} case count retrieved.`
+            : "Officer's total case count retrieved.";
 
-        return res.status(200).json({ data: cleanerData });
-    }
-    catch (error) {
-        console.error("Get Users case count error: ", error);
-        return res.status(500).json({ error: "Internal server error during data processing" });
+        response.data = {
+            user_id: officerId,
+            status: status || 'All',
+            count: count || 0
+        };
+
+        return res.status(STATUS.OK).json(response);
+
+    } catch (error) {
+        console.error("Get Officers Case Count Error: ", error);
+        const response = { ...errorResponseBody };
+        response.message = "Internal Server Error";
+        response.err = { details: error.message };
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
-async function getActiveCaseCount(req, res) {
+const getCaseById = async (req, res) => {
     const officerId = req.params.user_id;
 
-    if (!officerId) {
-        return res.status(400).json({ error: "Missing user_id parameter" });
-    }
     try {
-        const { data, count, error } = await supabase
-            .from('case_users')
-            .select(
-                `
-                case_id,
-                cases!inner (
-                status
-                )
-                `,
-                { count: 'exact' }
-            )
-            .eq('user_id', officerId)
-            .eq('cases.status', 'Pending');
-
-        if (error) return error;
-
-        return res.status(200).json({ ActiveCaseCount: count || 0 });
-    }
-    catch (error) {
-        console.log("Get Active error: ", error);
-        return res.status(500).json({ error: "Internal server error during data processing" })
-    }
-}
-
-async function getCompletedCaseCount(req, res) {
-    const officerId = req.params.user_id;
-
-    if (!officerId) {
-        return res.status(400).json({ error: "Missing user_id parameter" });
-    }
-    try {
-        const { data, count, error } = await supabase
-            .from('case_users')
-            .select(
-                `
-                case_id,
-                cases!inner (
-                status
-                )
-                `,
-                { count: 'exact' }
-            )
-            .eq('user_id', officerId)
-            .eq('cases.status', 'Completed');
-
-        if (error) return error;
-
-        return res.status(200).json({ CompletedCaseCount: count || 0 });
-    }
-    catch (error) {
-        console.log("Get Completed error: ", error);
-        return res.status(500).json({ error: "Internal server error during data processing" })
-    }
-}
-
-function formatDate(dateString) {
-    if (!dateString) return null;
-
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0'); // +1 because months are 0-indexed
-    const day = date.getDate().toString().padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
-}
-
-async function getCaseById(req, res) {
-    const officerId = req.params.user_id;
-
-    // 1. Validate input
-    if (!officerId) {
-        return res.status(400).json({ error: "Missing user_id parameter" });
-    }
-
-    try {
-        // 2. Define the Supabase query
         const selectString = "cases(case_number, title, status, priority, created_at, deadline, section_under_ipc)";
 
-        // 3. Fetch data from Supabase
         const { data, error } = await supabase
             .from('case_users')
             .select(selectString)
-            .eq('user_id', officerId);
+            .eq('user_id', officerId)
+            .eq('cases.is_deleted', false);
 
         if (error) throw error;
 
-        if (data) {
-            const processedData = data.map(item => {
-                if (item.cases) {
-                    item.cases.created_at_yyyymmdd = formatDate(item.cases.created_at);
-                }
-                return item;
-            });
+        const processedData = data.map(item => {
+            if (item.cases) {
+                return {
+                    ...item.cases,
+                };
+            }
+            return null;
+        }).filter(item => item !== null); // Remove any nulls if join failed
 
-            return res.status(200).json({ caseInfo: processedData }); _
-        }
+        const response = { ...successResponseBody };
 
-    }
-    catch (error) {
-        console.error("Get case error: ", error);
-        return res.status(500).json({ error: "Internal server error during data processing." });
+        response.message = "Assigned cases retrieved successfully.";
+        response.data = processedData;
+
+        return res.status(STATUS.OK).json(response);
+
+    } catch (error) {
+        console.error("Get cases by officer error: ", error);
+
+        const response = { ...errorResponseBody };
+
+        response.message = "Internal Server Error";
+        response.err = {
+            details: error.message || "An error occurred while fetching the assigned cases."
+        };
+
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
-async function getCaseByEmailId(req, res) {
-    const { email_id } = req.body
-
-    if (!email_id) {
-        return res.status(400).json({ error: "Missing Email Id" });
-    }
+const getCaseByEmailId = async (req, res) => {
+    const { email_id } = req.body;
 
     try {
         const { data, error } = await supabase
             .from('case_users')
             .select(`
-                    cases(
-                    case_id, 
-                    title, 
-                    status, 
-                    deadline, 
-                    priority, 
-                    created_at, 
-                    case_number, 
-                    section_under_ipc
-                    ),             
-                    users!inner(email_id) 
+                    cases!inner (  // <--- Changed to !inner to enforce the filter
+                        case_id, 
+                        title, 
+                        status, 
+                        deadline, 
+                        priority, 
+                        created_at, 
+                        case_number, 
+                        section_under_ipc
+                    ),
+                    users!inner(email_id)
                 `)
-            .eq('users.email_id', email_id);
+            .eq('users.email_id', email_id)
+            .eq('cases.is_deleted', false);
 
         if (error) throw error;
 
-        if (data && data.length > 0) {
-            
-            const caseList = data.map(item => item.cases);
+        const processedCaseList = (data || [])
+            .map(item => item.cases) // Extract just the 'cases' object
+            .filter(caseItem => caseItem !== null) // Safety check for nulls
+            .map(caseItem => ({
+                ...caseItem,
+            }));
 
-            const processedCaseList = caseList.map(caseItem => {
-                if (caseItem) {
-                    caseItem.created_at_yyyymmdd = formatDate(caseItem.created_at);
-                }
-                return caseItem;
-            });
+        const response = { ...successResponseBody };
 
-            return res.status(200).json({ caseInfo: processedCaseList });
+        response.message = "Cases retrieved successfully by email.";
+        response.data = processedCaseList;
 
-        } else {
-            return res.status(200).json({ caseInfo: [] });
-        }
+        return res.status(STATUS.OK).json(response);
 
-    }
-    catch (error) {
-        console.error("Get case error: ", error);
-        return res.status(500).json({ error: "Internal server error during data processing." });
+    } catch (error) {
+        console.error("Get Case by Email Error: ", error);
+
+        const response = { ...errorResponseBody };
+
+        response.message = "Internal Server Error";
+        response.err = {
+            details: error.message || "An unexpected error occurred while fetching cases by email."
+        };
+
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
-async function updateCase(req, res) {
+const updateCase = async (req, res) => {
     try {
-        // Retrieve sanitized data from the interceptor
-        const case_id = req.validCaseId;
         const updates = req.validCaseUpdates;
+        const caseNumber = req.targetCaseNumber;
+
+        if (!updates || !caseNumber) {
+            const response = { ...errorResponseBody };
+            response.message = "Internal Server Error";
+            response.err = { details: "Middleware failed to pass update data." };
+            return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
+        }
 
         const { data: updatedCase, error } = await supabase
             .from("cases")
             .update(updates)
-            .eq("case_id", case_id)
-            .select("case_number, title, status, priority, deadline, section_under_ipc") 
+            .eq("case_number", caseNumber)
+            .eq('is_deleted', false)
+            .select("case_number, title, status, priority, deadline, section_under_ipc")
             .single();
 
         if (error) throw error;
 
-        // 2. Handle Not Found
         if (!updatedCase) {
-            return res.status(404).json({ error: "Case not found." });
+            const response = { ...errorResponseBody };
+            response.message = "Update Failed";
+            response.err = {
+                case_number: `Case with number '${caseNumber}' not found.`
+            };
+            return res.status(STATUS.NOT_FOUND).json(response);
         }
 
-        // 3. Success
-        res.status(200).json({ 
-            message: "Case updated successfully", 
-            case: updatedCase 
-        });
+        const response = { ...successResponseBody };
+        response.message = "Case updated successfully.";
+        response.data = updatedCase;
+
+        return res.status(STATUS.OK).json(response);
 
     } catch (error) {
         console.error("Update Case Error:", error);
-        res.status(500).json({ error: "Internal server error during case update." });
+
+        const response = { ...errorResponseBody };
+
+        if (error.code === 'PGRST102') {
+            response.message = "Update Failed";
+            response.err = { details: "Empty update payload." };
+            return res.status(STATUS.BAD_REQUEST).json(response);
+        }
+
+        response.message = "Internal Server Error";
+        response.err = { details: error.message };
+
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
-async function deleteCase(req, res) {
+const deleteCase = async (req, res) => {
     try {
-        const case_id = req.validCaseId; 
+        const caseId = req.validCaseId;
 
-        // 1. Perform Delete
-        const { error } = await supabase
+        if (!caseId) {
+            const response = { ...errorResponseBody };
+            response.message = "Internal Server Error";
+            response.err = { details: "Middleware failed to provide a valid Case ID." };
+            return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
+        }
+
+        const { data, error } = await supabase
             .from("cases")
-            .delete()
-            .eq("case_id", case_id);
+            .update({
+                is_deleted: true,
+                deleted_at: new Date().toISOString()
+            })
+            .eq("case_id", caseId)
+            .select()
+            .single();
 
         if (error) throw error;
 
-        // 2. Success Response
-        res.status(200).json({ message: "Case deleted successfully" });
+        const response = { ...successResponseBody };
+        response.message = "Case deleted successfully (moved to archive).";
+        response.data = { case_id: caseId };
+
+        return res.status(STATUS.OK).json(response);
 
     } catch (error) {
-        console.error("Delete Case Error:", error);
-        if (error.code === '23503') {
-            return res.status(409).json({ 
-                error: "Cannot delete case because it has related records (evidence, officers). Please clear them first." 
-            });
+        console.error("Soft Delete Case Error:", error);
+
+        const response = { ...errorResponseBody };
+        response.message = "Internal Server Error";
+        response.err = { details: error.message };
+
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
+    }
+}
+
+const getCase = async (req, res) => {
+    const caseNumber = req.query.case_number; // Get from Query
+
+    try {
+        // ==================================================
+        // SCENARIO 1: Specific Case Requested
+        // ==================================================
+        if (caseNumber) {
+            const { data, error } = await supabase
+                .from("cases")
+                .select(`
+                    case_id,
+                    case_number,
+                    title,
+                    status,
+                    priority,
+                    deadline,
+                    section_under_ipc,
+                    created_at,
+                    updated_at
+                `)
+                .eq("case_number", caseNumber)
+                .eq("is_deleted", false) // Filter Soft Delete
+                .maybeSingle();
+
+            if (error) throw error;
+
+            if (!data) {
+                const response = { ...errorResponseBody };
+                response.message = "Case Not Found";
+                response.err = { 
+                    details: `Case '${caseNumber}' does not exist or has been deleted.` 
+                };
+                return res.status(STATUS.NOT_FOUND).json(response);
+            }
+
+            const response = { ...successResponseBody };
+            response.message = "Case details retrieved successfully.";
+            response.data = data; // Returns a single Object
+
+            return res.status(STATUS.OK).json(response);
         }
-        res.status(500).json({ error: "Internal server error during case deletion." });
+
+        // ==================================================
+        // SCENARIO 2: Fetch ALL Active Cases
+        // ==================================================
+        const { data, error } = await supabase
+            .from("cases")
+            .select(`
+                case_id,
+                case_number,
+                title,
+                status,
+                priority,
+                deadline,
+                section_under_ipc,
+                created_at
+            `)
+            .eq("is_deleted", false) // Filter Soft Delete
+            .order('created_at', { ascending: false }); // Latest first
+
+        if (error) throw error;
+
+        const response = { ...successResponseBody };
+        response.message = "All active cases retrieved successfully.";
+        response.data = data; // Returns an Array of Objects
+
+        return res.status(STATUS.OK).json(response);
+
+    } catch (error) {
+        console.error("Get Case Error:", error);
+
+        const response = { ...errorResponseBody };
+        response.message = "Internal Server Error";
+        response.err = { details: error.message };
+
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(response);
     }
 }
 
 export default {
-    createNewCase,
+    createCase,
     getTotalCaseCount,
     getOfficersCaseCount,
-    getActiveCaseCount,
-    getCompletedCaseCount,
     getCaseById,
     getCaseByEmailId,
     updateCase,
-    deleteCase
+    deleteCase,
+    getCase
 }
