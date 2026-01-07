@@ -15,7 +15,7 @@ router.post(
 
 router.patch(
     "/reset", 
-    validateStrictBody(["email_id, password, code"]),
+    validateStrictBody(["email_id", "password", "code"]),
     userIntercetor.validateResetPass, 
     userController.resetPassword
 );
