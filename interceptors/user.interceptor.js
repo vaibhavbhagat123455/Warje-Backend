@@ -205,7 +205,7 @@ const validateGetUsers = async (req, res, next) => {
     }
 }
 
-const validateGetUnverifiedUsers = async(req, res, next) => {
+const validateGetUnverifiedUsers = async (req, res, next) => {
     const currentUser = req.user;
 
     try {
@@ -303,36 +303,37 @@ const validateUserUpdate = (req, res, next) => {
     }
 };
 
-const isNotTempUser = async (data) => {
-    try {
-        const { email_id } = data;
+const isNotTempUser = async (data, supabase) => {
+    console.log(data);
+    const { email_id } = data;
 
-        const { data: tempUser, error: tempUserError } = await supabase
-            .from("temp_users")
-            .select("name")
-            .eq("email_id", email_id)
-            .maybeSingle();
+    const { data: tempUser, error } = await supabase
+        .from("temp_users")
+        .select("name")
+        .eq("email_id", email_id)
+        .maybeSingle();
 
-        if (tempUserError) throw tempUserError;
-
-        if (tempUser) {
-            errorResponseBody.message = "User registration is pending admin approval. You cannot login or signup again yet.";
-            return res.status(STATUS.FORBIDDEN).json(errorResponseBody);
-        }
-
-        return true;
-    } catch (error) {
-        console.log("Is Temp user error: ", error);
-        if (error.code === 'PGRST116') {
-            errorResponseBody.err = { email_id: "User not found. Please sign up." };
-            errorResponseBody.message = "Authentication Failed";
-            return res.status(STATUS.NOT_FOUND).json(errorResponseBody);
-        }
-
-        errorResponseBody.message = "Something went wrong.";
-        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(errorResponseBody);
+    // Supabase unexpected error
+    if (error && error.code !== "PGRST116") {
+        throw {
+            code: STATUS.INTERNAL_SERVER_ERROR,
+            message: "Database error",
+            error
+        };
     }
-}
+
+    // User exists in temp_users
+    if (tempUser) {
+        throw {
+            code: STATUS.FORBIDDEN,
+            message:
+                "User registration is pending admin approval. You cannot login or signup again yet."
+        };
+    }
+
+    // Not a temp user → allow flow
+    return true;
+};
 
 export const isAdmin = async (data) => {
     try {
