@@ -373,20 +373,7 @@ const validateCaseDeletion = async (req, res, next) => {
 };
 
 const validateGetCase = async (req, res, next) => {
-    const currentUser = req.user;
     const caseNumber = req.query.case_number; 
-
-    try {
-        await isAdmin({ user_id: currentUser.user_id });
-    } catch (error) {
-        if (error.code) {
-            const response = { ...errorResponseBody };
-            response.message = error.message;
-            response.err = error.err || {};
-            return res.status(error.code).json(response);
-        }
-        return res.status(STATUS.INTERNAL_SERVER_ERROR).json({ ...errorResponseBody, message: "Auth Error" });
-    }
 
     if (caseNumber) {
         req.targetCaseNumber = caseNumber;
