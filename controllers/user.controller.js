@@ -349,6 +349,40 @@ const updateIsDeleted = async (req, res) => {
     }
 };
 
+const isAdmin = async (req, res) => {
+    const user_id = req.params.user_id;
+    try {
+        const { data: user } = await supabase
+            .from("users")
+            .select("role")
+            .eq("user_id", user_id)
+            .single()
+            .throwOnError();
+
+        if (user && user.role !== USER_ROLE.ADMIN) {
+            errorResponseBody.message = "Access denied. Admin privileges required.";
+            errorResponseBody.err = { role: "Insufficient permissions" };
+            return res.status(STATUS.FORBIDDEN).json(errorResponseBody);
+        }
+        const response = { ...successResponseBody };
+        response.message = "User has ADMIN privileges";
+
+        return res.status(STATUS.OK).json(response);
+
+    } catch (error) {
+        console.log("Is admin error: ", error);
+        if (error.code === 'PGRST116') {
+            errorResponseBody.message = "Access denied. Admin privileges required.";
+            errorResponseBody.err = { email_id: "User not found. Please sign up." };
+            errorResponseBody.message = "Authentication Failed";
+            return res.status(STATUS.NOT_FOUND).json(errorResponseBody);
+        }
+
+        errorResponseBody.message = "Something went wrong.";
+        return res.status(STATUS.INTERNAL_SERVER_ERROR).json(errorResponseBody);
+    }
+}
+
 export default {
     sendOTP,
     changeRole,
@@ -358,5 +392,6 @@ export default {
     updateUser,
     deleteUser,
     resetPassword,
-    updateIsDeleted
+    updateIsDeleted,
+    isAdmin
 };

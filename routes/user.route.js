@@ -23,6 +23,12 @@ router.patch(
 router.use(verifyToken);
 router.use(checkTokenRefresh);
 
+router.get(
+    "/admin/:user_id",
+    validateStrictBody([""]),
+    userController.isAdmin
+)
+
 router.patch(
     "/:id", 
     userIntercetor.validateUserUpdate, 
